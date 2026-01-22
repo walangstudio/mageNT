@@ -1,0 +1,516 @@
+# Software Development Team MCP Server Configuration
+# Copy this to config.yaml and customize for your needs
+
+# Agent Configuration
+# Enable/disable agents and customize their specializations
+agents:
+  # Business & Analysis
+  business_analyst:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Agile, User Stories, Requirements Engineering"
+
+  product_manager:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Product Strategy, Roadmapping, Prioritization"
+
+  system_architect:
+    enabled: true
+    expertise_level: "principal"
+    specialization: "Distributed Systems, Microservices, Cloud Architecture"
+
+  ui_ux_designer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Figma, Wireframing, User Research, Design Systems"
+
+  technical_writer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "API Documentation, User Guides, Architecture Docs"
+
+  # Frontend Development
+  react_developer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "React 18, TypeScript, Hooks, Context API, Tailwind CSS, Vite"
+
+  nextjs_developer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Next.js 14, App Router, Server Components, TypeScript"
+
+  vue_developer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Vue 3, Composition API, Pinia, TypeScript"
+
+  # Backend Development
+  nodejs_backend:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Node.js, Express, TypeScript, JWT, PostgreSQL, Redis"
+
+  python_backend:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "FastAPI, SQLAlchemy, Pydantic, async/await"
+
+  java_backend:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Spring Boot 3, JPA, Microservices, Maven"
+
+  go_backend:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Go 1.21+, Gin, GORM, goroutines"
+
+  dotnet_backend:
+    enabled: true
+    expertise_level: "senior"
+    specialization: ".NET 8, C# 12, ASP.NET Core, Entity Framework"
+
+  # Full-Stack & Mobile
+  fullstack_developer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "React, Node.js, TypeScript, PostgreSQL"
+
+  mobile_developer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "React Native, Flutter, iOS, Android"
+
+  api_developer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "REST, GraphQL, OpenAPI, API Design Patterns"
+
+  # Data & Infrastructure
+  database_administrator:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "PostgreSQL, MySQL, Schema Design, Query Optimization, Indexing"
+
+  devops_engineer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Docker, Kubernetes, CI/CD, GitHub Actions, Jenkins"
+
+  cloud_architect:
+    enabled: true
+    expertise_level: "principal"
+    specialization: "AWS, Azure, GCP, Terraform, CloudFormation"
+
+  # Quality & Security
+  qa_engineer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Jest, Pytest, Selenium, Test Automation, TDD"
+
+  security_engineer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "OWASP, Penetration Testing, Security Audits, Encryption"
+
+  performance_engineer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Performance Profiling, Optimization, Load Testing"
+
+  automation_qa:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Playwright, Cypress, Selenium, E2E Testing, CI/CD Integration"
+
+  debugging_expert:
+    enabled: true
+    expertise_level: "principal"
+    specialization: "Root Cause Analysis, Stack Traces, Performance Profiling, Log Analysis"
+
+# LLM Configuration
+# Default mode works with Claude Pro (no API key needed)
+llm:
+  mode: "claude_pro"  # Options: claude_pro, api, local
+
+  # For API users (Phase 2)
+  api:
+    provider: "anthropic"  # anthropic, openai, custom
+    model: "claude-sonnet-4-20250514"
+    api_key_env: "ANTHROPIC_API_KEY"
+    base_url: null  # For custom OpenAI-compatible APIs
+    max_tokens: 4096
+    temperature: 0.7
+
+  # For local model users (Phase 3)
+  local:
+    provider: "ollama"  # ollama, lmstudio
+    model: "llama3.1"
+    base_url: "http://localhost:11434"
+    max_tokens: 4096
+    temperature: 0.7
+
+# Workflow Templates
+# Pre-defined agent sequences for common project types
+workflows:
+  # Full-stack web application
+  full_stack_web:
+    enabled: true
+    description: "Complete web application with frontend, backend, and database"
+    steps:
+      - agent: business_analyst
+        description: "Gather requirements and create user stories"
+      - agent: system_architect
+        description: "Design system architecture"
+      - agent: react_developer
+        description: "Design and implement frontend"
+      - agent: nodejs_backend
+        description: "Implement backend API"
+      - agent: database_administrator
+        description: "Design database schema"
+      - agent: qa_engineer
+        description: "Create test suite"
+      - agent: devops_engineer
+        description: "Set up CI/CD and deployment"
+
+  # REST API service
+  api_service:
+    enabled: true
+    description: "Backend API service with database"
+    steps:
+      - agent: business_analyst
+        description: "Define API requirements"
+      - agent: api_developer
+        description: "Design API endpoints and OpenAPI spec"
+      - agent: nodejs_backend
+        description: "Implement API service"
+      - agent: database_administrator
+        description: "Design database schema"
+      - agent: qa_engineer
+        description: "Create API tests"
+
+  # Frontend application
+  frontend_app:
+    enabled: true
+    description: "Single-page application or static site"
+    steps:
+      - agent: business_analyst
+        description: "Gather UI/UX requirements"
+      - agent: ui_ux_designer
+        description: "Create wireframes and design system"
+      - agent: react_developer
+        description: "Implement frontend application"
+      - agent: qa_engineer
+        description: "Create frontend tests"
+
+  # Next.js full-stack application
+  nextjs_app:
+    enabled: true
+    description: "Next.js full-stack application with App Router"
+    steps:
+      - agent: business_analyst
+        description: "Gather requirements"
+      - agent: system_architect
+        description: "Design application architecture"
+      - agent: nextjs_developer
+        description: "Implement Next.js application"
+      - agent: database_administrator
+        description: "Design database schema"
+      - agent: qa_engineer
+        description: "Create test suite"
+      - agent: devops_engineer
+        description: "Set up deployment (Vercel/Docker)"
+
+  # Python FastAPI service
+  python_api:
+    enabled: true
+    description: "Python FastAPI backend service"
+    steps:
+      - agent: business_analyst
+        description: "Define API requirements"
+      - agent: api_developer
+        description: "Design API endpoints"
+      - agent: python_backend
+        description: "Implement FastAPI service"
+      - agent: database_administrator
+        description: "Design database schema"
+      - agent: qa_engineer
+        description: "Create pytest test suite"
+
+  # Mobile application
+  mobile_app:
+    enabled: true
+    description: "Cross-platform mobile application"
+    steps:
+      - agent: business_analyst
+        description: "Gather mobile app requirements"
+      - agent: ui_ux_designer
+        description: "Design mobile UI/UX"
+      - agent: mobile_developer
+        description: "Implement mobile application"
+      - agent: nodejs_backend
+        description: "Implement backend API"
+      - agent: database_administrator
+        description: "Design database schema"
+      - agent: qa_engineer
+        description: "Create mobile tests"
+
+  # Security audit workflow
+  security_audit:
+    enabled: true
+    description: "Security review and hardening"
+    steps:
+      - agent: security_engineer
+        description: "Conduct security review"
+      - agent: qa_engineer
+        description: "Create security test cases"
+      - agent: devops_engineer
+        description: "Implement security configurations"
+      - agent: technical_writer
+        description: "Document security measures"
+
+  # DevOps setup workflow
+  devops_setup:
+    enabled: true
+    description: "CI/CD and infrastructure setup"
+    steps:
+      - agent: devops_engineer
+        description: "Design CI/CD pipeline"
+      - agent: cloud_architect
+        description: "Design cloud infrastructure"
+      - agent: security_engineer
+        description: "Implement security best practices"
+      - agent: technical_writer
+        description: "Create runbooks and documentation"
+
+  # Microservice
+  microservice:
+    enabled: true
+    description: "Single microservice with deployment"
+    steps:
+      - agent: system_architect
+        description: "Design microservice architecture"
+      - agent: nodejs_backend
+        description: "Implement service"
+      - agent: database_administrator
+        description: "Design data model"
+      - agent: devops_engineer
+        description: "Create CI/CD pipeline and Docker setup"
+      - agent: qa_engineer
+        description: "Create test suite"
+
+  # Debugging workflow
+  debug_project:
+    enabled: true
+    description: "Debug and fix issues in existing project"
+    steps:
+      - agent: debugging_expert
+        description: "Analyze issues and identify root causes"
+      - agent: qa_engineer
+        description: "Create regression tests"
+      - agent: performance_engineer
+        description: "Identify performance bottlenecks"
+
+  # Performance optimization workflow
+  performance_optimization:
+    enabled: true
+    description: "Optimize application performance"
+    steps:
+      - agent: performance_engineer
+        description: "Profile and identify bottlenecks"
+      - agent: database_administrator
+        description: "Optimize database queries and indexes"
+      - agent: devops_engineer
+        description: "Implement caching and infrastructure optimizations"
+      - agent: qa_engineer
+        description: "Create performance test suite"
+
+  # Data pipeline workflow
+  data_pipeline:
+    enabled: true
+    description: "Data processing pipeline"
+    steps:
+      - agent: business_analyst
+        description: "Define data requirements"
+      - agent: python_backend
+        description: "Implement data processing logic"
+      - agent: database_administrator
+        description: "Design data storage"
+      - agent: qa_engineer
+        description: "Create data validation tests"
+      - agent: devops_engineer
+        description: "Set up pipeline scheduling"
+
+  # ETL service workflow
+  etl_service:
+    enabled: true
+    description: "ETL service for data integration"
+    steps:
+      - agent: business_analyst
+        description: "Define data sources and targets"
+      - agent: system_architect
+        description: "Design ETL architecture"
+      - agent: python_backend
+        description: "Implement ETL jobs"
+      - agent: database_administrator
+        description: "Design staging and target schemas"
+      - agent: devops_engineer
+        description: "Set up orchestration and monitoring"
+
+  # Enterprise API workflow
+  enterprise_api:
+    enabled: true
+    description: "Enterprise-grade API with security and scalability"
+    steps:
+      - agent: business_analyst
+        description: "Gather enterprise requirements"
+      - agent: system_architect
+        description: "Design scalable API architecture"
+      - agent: api_developer
+        description: "Design API contracts and versioning"
+      - agent: nodejs_backend
+        description: "Implement API service"
+      - agent: security_engineer
+        description: "Implement security controls"
+      - agent: qa_engineer
+        description: "Create comprehensive test suite"
+      - agent: devops_engineer
+        description: "Set up high-availability deployment"
+
+  # SaaS platform workflow
+  saas_platform:
+    enabled: true
+    description: "Multi-tenant SaaS application"
+    steps:
+      - agent: business_analyst
+        description: "Define SaaS requirements"
+      - agent: system_architect
+        description: "Design multi-tenant architecture"
+      - agent: fullstack_developer
+        description: "Implement core platform"
+      - agent: database_administrator
+        description: "Design tenant-aware database"
+      - agent: security_engineer
+        description: "Implement tenant isolation"
+      - agent: devops_engineer
+        description: "Set up scalable infrastructure"
+
+  # Multi-tenant application workflow
+  multi_tenant_app:
+    enabled: true
+    description: "Multi-tenant application with data isolation"
+    steps:
+      - agent: business_analyst
+        description: "Define tenant requirements"
+      - agent: system_architect
+        description: "Design tenant architecture"
+      - agent: nodejs_backend
+        description: "Implement multi-tenant backend"
+      - agent: database_administrator
+        description: "Design tenant data isolation"
+      - agent: security_engineer
+        description: "Implement access controls"
+
+  # Legacy migration workflow
+  legacy_migration:
+    enabled: true
+    description: "Modernize legacy system"
+    steps:
+      - agent: system_architect
+        description: "Analyze legacy system and design migration"
+      - agent: nodejs_backend
+        description: "Implement new services"
+      - agent: database_administrator
+        description: "Plan data migration"
+      - agent: qa_engineer
+        description: "Create migration tests"
+      - agent: devops_engineer
+        description: "Set up blue-green deployment"
+
+# Skills Configuration
+skills:
+  scaffold:
+    enabled: true
+    commands:
+      - "/scaffold-react"
+      - "/scaffold-nextjs"
+      - "/scaffold-fastapi"
+      - "/scaffold-express"
+  analysis:
+    enabled: true
+    commands:
+      - "/debug"
+      - "/analyze-error"
+  testing:
+    enabled: true
+    commands:
+      - "/run-tests"
+      - "/generate-tests"
+  version:
+    enabled: true
+    commands:
+      - "/check-versions"
+  security:
+    enabled: true
+    commands:
+      - "/security-scan"
+
+# Rules Configuration
+# Code quality rules that work with ANY LLM
+rules:
+  enabled: true
+
+  # Enable/disable rule categories
+  categories:
+    security: true      # Secrets detection, SQL injection, XSS prevention
+    coding_style: true  # File size, debug statements, naming conventions
+    testing: true       # Test coverage, naming, assertions
+    git: true          # Commit messages, branch naming
+    performance: true   # N+1 queries, async patterns, memoization
+
+  # Minimum severity to report (error, warning, info)
+  min_severity: "info"
+
+  # Fail on warnings (stricter mode)
+  fail_on_warnings: false
+
+  # Rule-specific settings
+  rule_settings:
+    file-size-limit:
+      max_lines: 400
+    function-length-limit:
+      max_lines: 50
+    test-coverage-minimum:
+      min_coverage: 80
+
+# Hooks Configuration
+# Automation hooks that work with ANY LLM
+hooks:
+  enabled: true
+
+  # Enable/disable specific hooks
+  disabled_hooks: []
+  # disabled_hooks:
+  #   - "auto-format"
+  #   - "log-tool-usage"
+
+  # Continue processing on hook failure
+  continue_on_failure: false
+
+  # Hook types to enable
+  enabled_types:
+    - pre_tool
+    - post_tool
+    - pre_edit
+    - post_edit
+    - pre_commit
+    - session_start
+    - session_end
+
+# Server Configuration
+server:
+  name: "magent-mcp"
+  version: "0.4.0"
+  description: "Multi-agent software development team MCP server with rules and hooks"
