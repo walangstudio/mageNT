@@ -1,0 +1,224 @@
+# Software Development Team MCP Server Configuration
+# Copy this to config.yaml and customize for your needs
+
+# Agent Configuration
+# Enable/disable agents and customize their specializations
+agents:
+  # Business & Analysis
+  business_analyst:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Agile, User Stories, Requirements Engineering"
+
+  product_manager:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Product Strategy, Roadmapping, Prioritization"
+
+  system_architect:
+    enabled: false
+    expertise_level: "principal"
+    specialization: "Distributed Systems, Microservices, Cloud Architecture"
+
+  # Frontend Development
+  frontend_general:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "HTML5, CSS3, JavaScript ES6+, Responsive Design"
+
+  react_developer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "React 18, TypeScript, Hooks, Context API, Tailwind CSS, Vite"
+
+  nextjs_developer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Next.js 14, App Router, Server Components, TypeScript"
+
+  vue_developer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Vue 3, Composition API, Pinia, TypeScript"
+
+  # Backend Development
+  backend_general:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "REST APIs, Authentication, Database Design"
+
+  nodejs_backend:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Node.js, Express, TypeScript, JWT, PostgreSQL, Redis"
+
+  java_backend:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Spring Boot 3, JPA, Microservices, Maven"
+
+  python_backend:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "FastAPI, SQLAlchemy, Pydantic, async/await"
+
+  go_backend:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Go 1.21+, Gin, GORM, goroutines"
+
+  dotnet_backend:
+    enabled: false
+    expertise_level: "senior"
+    specialization: ".NET 8, C# 12, ASP.NET Core, Entity Framework"
+
+  # Full-Stack
+  fullstack_developer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "React, Node.js, TypeScript, PostgreSQL"
+
+  # Mobile Development
+  mobile_developer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "React Native, Flutter, iOS, Android"
+
+  # Data & Infrastructure
+  database_administrator:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "PostgreSQL, MySQL, Schema Design, Query Optimization, Indexing"
+
+  devops_engineer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Docker, Kubernetes, CI/CD, GitHub Actions, Jenkins"
+
+  cloud_architect:
+    enabled: false
+    expertise_level: "principal"
+    specialization: "AWS, Azure, GCP, Terraform, CloudFormation"
+
+  # Quality & Security
+  qa_engineer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Jest, Pytest, Selenium, Test Automation, TDD"
+
+  security_engineer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "OWASP, Penetration Testing, Security Audits, Encryption"
+
+  performance_engineer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Performance Profiling, Optimization, Load Testing"
+
+  # Specialized Roles
+  api_developer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "REST, GraphQL, OpenAPI, API Design Patterns"
+
+  ui_ux_designer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Figma, Wireframing, User Research, Design Systems"
+
+  technical_writer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "API Documentation, User Guides, Architecture Docs"
+
+# LLM Configuration
+# Default mode works with Claude Pro (no API key needed)
+llm:
+  mode: "claude_pro"  # Options: claude_pro, api, local
+
+  # For API users (Phase 2)
+  api:
+    provider: "anthropic"  # anthropic, openai, custom
+    model: "claude-sonnet-4-20250514"
+    api_key_env: "ANTHROPIC_API_KEY"
+    base_url: null  # For custom OpenAI-compatible APIs
+    max_tokens: 4096
+    temperature: 0.7
+
+  # For local model users (Phase 3)
+  local:
+    provider: "ollama"  # ollama, lmstudio
+    model: "llama3.1"
+    base_url: "http://localhost:11434"
+    max_tokens: 4096
+    temperature: 0.7
+
+# Workflow Templates
+# Pre-defined agent sequences for common project types
+workflows:
+  # Full-stack web application
+  full_stack_web:
+    enabled: true
+    description: "Complete web application with frontend, backend, and database"
+    steps:
+      - agent: business_analyst
+        description: "Gather requirements and create user stories"
+      - agent: react_developer
+        description: "Design and implement frontend"
+      - agent: nodejs_backend
+        description: "Implement backend API"
+      - agent: database_administrator
+        description: "Design database schema"
+      - agent: qa_engineer
+        description: "Create test suite"
+
+  # REST API service
+  api_service:
+    enabled: true
+    description: "Backend API service with database"
+    steps:
+      - agent: business_analyst
+        description: "Define API requirements"
+      - agent: api_developer
+        description: "Design API endpoints and OpenAPI spec"
+      - agent: nodejs_backend
+        description: "Implement API service"
+      - agent: database_administrator
+        description: "Design database schema"
+      - agent: qa_engineer
+        description: "Create API tests"
+
+  # Frontend application
+  frontend_app:
+    enabled: true
+    description: "Single-page application or static site"
+    steps:
+      - agent: business_analyst
+        description: "Gather UI/UX requirements"
+      - agent: react_developer
+        description: "Implement frontend application"
+      - agent: qa_engineer
+        description: "Create frontend tests"
+
+  # Microservice
+  microservice:
+    enabled: false
+    description: "Single microservice with deployment"
+    steps:
+      - agent: system_architect
+        description: "Design microservice architecture"
+      - agent: nodejs_backend
+        description: "Implement service"
+      - agent: database_administrator
+        description: "Design data model"
+      - agent: devops_engineer
+        description: "Create CI/CD pipeline and Docker setup"
+      - agent: qa_engineer
+        description: "Create test suite"
+
+# Server Configuration
+server:
+  name: "software-team-mcp"
+  version: "0.1.0"
+  description: "Multi-agent software development team MCP server"
