@@ -1,134 +1,158 @@
 # mageNT
 
-A local MCP server that gives Claude access to a team of specialized development agents. No API keys needed - works with your existing Claude Pro subscription.
+Give Claude a team of specialist developers through MCP. Works with Claude Desktop, Claude Code, or any MCP client.
 
-## What is this?
+## What's this?
 
-mageNT adds domain-specific expertise to Claude through the Model Context Protocol. Instead of Claude being a generalist, you can ask it to consult specialists:
+Ever wish Claude had deep expertise in specific areas? That's what mageNT does. Instead of getting generic advice, you can consult actual specialists:
 
 - Need requirements? Talk to the Business Analyst
-- Building a React app? Consult the React Developer
-- Setting up an API? Ask the Node.js Backend Developer
+- Building a React app? Get the React Developer
+- Designing an API? Ask the API Developer
 
-Each agent has deep knowledge of their domain - best practices, common patterns, and practical guidance.
+Think of it like having 24 senior devs on standby, each with their own specialty.
 
-## Installation
+## Quick Start
+
+Run the installer:
+
+```bash
+cd mageNT
+./install.sh                    # for Claude Desktop
+./install.sh -c code            # for Claude Code
+./install.sh -c both            # for both
+```
+
+That's it. The installer handles everything - creates a venv, installs deps, configures your MCP client, runs tests.
+
+Then just restart Claude and try:
+```
+List the available agents
+```
+
+## Manual Setup
+
+If you want to do it yourself:
 
 ```bash
 cd mageNT
 pip install -r requirements.txt
+python server.py  # test it works, then Ctrl+C
 ```
 
-Test it works:
-```bash
-python server.py
-```
+Now add mageNT to your config:
 
-You should see agents loading. Press Ctrl+C to stop.
-
-## Connect to Claude Desktop
-
-Add mageNT to your Claude Desktop config:
-
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-
+**Claude Desktop** (`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
 ```json
 {
   "mcpServers": {
     "magent": {
       "command": "python",
-      "args": ["C:\\path\\to\\mageNT\\server.py"]
+      "args": ["/full/path/to/mageNT/server.py"]
     }
   }
 }
 ```
 
-Use your actual path. Double backslashes on Windows, forward slashes on Mac/Linux.
-
-Restart Claude Desktop completely (quit, not just close the window).
-
-## Usage
-
-Once connected, just ask Claude naturally:
-
-```
-List the available agents
-```
-
-```
-I need to build a user authentication system - can you help?
+**Claude Code** (create `.mcp.json` in your project):
+```json
+{
+  "mcpServers": {
+    "magent": {
+      "command": "python",
+      "args": ["/full/path/to/mageNT/server.py"]
+    }
+  }
+}
 ```
 
+Paths need to be absolute. Use `\\` on Windows, `/` on Mac/Linux.
+
+Restart Claude completely (actually quit it, not just close the window).
+
+## How to Use
+
+Just talk to Claude normally:
+
 ```
-Start a full_stack_web workflow for a task management app
+I need to build user authentication - what's the best approach?
 ```
 
-Claude will automatically use the right agents for the job.
+```
+Can you review this React component for performance issues?
+```
 
-## Available Agents
+```
+Start a full_stack_web workflow for a todo app
+```
 
-**24 agents** across different specializations:
+Claude knows when to pull in specialists automatically. Or you can request specific agents:
 
-| Category | Agents |
+```
+Consult the Security Engineer about this auth code
+```
+
+## Who's on the Team
+
+24 agents across different areas:
+
+| What they do | Who's available |
 |----------|--------|
-| Business | Business Analyst, Product Manager |
-| Design | UI/UX Designer, System Architect |
-| Frontend | React, Next.js, Vue.js developers |
-| Backend | Node.js, Python, Java, Go, .NET developers |
-| Data | Database Administrator |
-| DevOps | DevOps Engineer, Cloud Architect |
-| Quality | QA Engineer, Security Engineer, Performance Engineer |
-| Support | Technical Writer, Debugging Expert |
+| Business stuff | Business Analyst, Product Manager |
+| Architecture & Design | System Architect, UI/UX Designer |
+| Frontend | React, Next.js, Vue.js devs |
+| Backend | Node.js, Python, Java, Go, .NET, API specialists |
+| Infrastructure | Database Admin, DevOps, Cloud Architect |
+| Quality & Security | QA, Security Engineer, Performance Engineer, Automation QA |
+| Other | Technical Writer, Debugging Expert, Full-Stack Dev, Mobile Dev |
 
-## Code Quality Features
+## Code Quality Tools
 
-mageNT includes a **Rules Engine** with 20 built-in rules:
+There's also a rules engine that checks for common issues:
 
-- Security checks (hardcoded secrets, SQL injection, XSS)
-- Code style validation
-- Performance patterns (N+1 queries, sync in async)
-- Git hygiene (commit messages, .gitignore)
+- Security problems (secrets in code, SQL injection, XSS)
+- Style violations
+- Performance antipatterns (N+1 queries, etc)
+- Git stuff (bad commit messages, missing .gitignore)
 
-And a **Hooks System** for automation:
+Plus automation hooks:
+- Pre-commit checks
+- Code edit validation
+- Security scans
 
-- Pre-commit validation
-- Code edit checks
-- Security scanning
-
-Use them through Claude:
+Just ask Claude:
 ```
-Check this code for security issues: [paste code]
+Check this code for issues: [paste code]
 ```
 
-## Configuration
+## Customizing
 
-Edit `config.yaml` to customize:
+Edit `config.yaml` to tune agents:
 
 ```yaml
 agents:
   react_developer:
     enabled: true
-    expertise_level: "senior"  # junior, mid, senior, principal
+    expertise_level: "senior"  # junior, mid, senior, or principal
     specialization: "React 18, TypeScript, Tailwind"
 ```
 
 ## Workflows
 
-Pre-built multi-agent workflows:
+Pre-built workflows coordinate multiple agents:
 
-- `full_stack_web` - Requirements, frontend, backend, database, testing
+- `full_stack_web` - Full app (requirements → design → frontend → backend → testing)
 - `api_service` - API design and implementation
-- `frontend_app` - UI/UX focused workflow
+- `frontend_app` - UI/UX focused
 
-Start one with:
+Start one like:
 ```
-Start the full_stack_web workflow for [your project]
+Start the full_stack_web workflow for a blog platform
 ```
 
-## Adding Custom Agents
+## Making Your Own Agents
 
-Create a new file in `agents/`:
+Drop a new file in `agents/`:
 
 ```python
 from agents.base import BaseAgent
@@ -140,43 +164,45 @@ class MyAgent(BaseAgent):
 
     @property
     def role(self) -> str:
-        return "My Specialist Role"
+        return "My Specialist"
 
-    # ... implement other required properties
+    # implement the rest...
 ```
 
 Register it in `server.py` and add to `config.yaml`.
 
-## Troubleshooting
+## Common Issues
 
-**Tools don't appear in Claude:**
-1. Check the path in your config is correct and absolute
-2. Make sure you restarted Claude Desktop completely
-3. Try running `python server.py` to see if there are errors
+**Agents not showing up?**
+- Check your config path is correct and absolute
+- Actually restart Claude (quit it completely)
+- Run `python server.py` to see any errors
 
-**Python not found:**
-Use the full path to Python in your config, or add Python to your PATH.
+**Python not found?**
+- Use full path to python in your config
+- Or add Python to PATH
 
-**Import errors:**
-Make sure you're in the mageNT directory and dependencies are installed:
+**Import errors?**
 ```bash
+cd mageNT
 pip install -r requirements.txt
 ```
 
-## Project Structure
+## What's Where
 
 ```
 mageNT/
-├── server.py           # MCP server entry point
-├── config.yaml         # Your configuration
-├── agents/             # Agent implementations
+├── server.py           # MCP server
+├── config.yaml         # Your settings
+├── install.sh          # Automated installer
+├── agents/             # The 24 agents
 ├── rules/              # Code quality rules
 ├── hooks/              # Automation hooks
-├── workflows/          # Workflow templates
-└── tests/              # Test suite
+├── workflows/          # Multi-agent workflows
+└── tests/              # Tests
 ```
 
-## Running Tests
+## Testing
 
 ```bash
 python -m pytest tests/ -v
@@ -185,8 +211,7 @@ python -m pytest tests/ -v
 ## Requirements
 
 - Python 3.10+
-- Claude Pro subscription
-- Claude Desktop or Claude Code
+- Any MCP client (Claude Desktop, Claude Code, Cline, Continue, etc.)
 
 ## License
 

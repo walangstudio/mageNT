@@ -43,8 +43,13 @@ Thumbs.db
 # User configuration (don't commit personal config)
 # config.yaml  # Uncomment if you want to keep config.yaml in git
 
+# Installation marker (user-specific)
+.magent-installed
+
 # MCP
 .mcp/
+.mcp.json
+.mcp.json.backup.*
 
 # Claude Code
 .claude/
