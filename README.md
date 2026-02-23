@@ -10,7 +10,7 @@ Ever wish Claude had deep expertise in specific areas? That's what mageNT does. 
 - Building a React app? Get the React Developer
 - Designing an API? Ask the API Developer
 
-Think of it like having 24 senior devs on standby, each with their own specialty.
+Think of it like having 32 senior devs on standby, each with their own specialty.
 
 ## Quick Start
 
@@ -94,17 +94,18 @@ Consult the Security Engineer about this auth code
 
 ## Who's on the Team
 
-24 agents across different areas:
+32 agents across different areas:
 
 | What they do | Who's available |
 |----------|--------|
-| Business stuff | Business Analyst, Product Manager |
+| Business stuff | Business Analyst, Product Manager, Delivery Manager |
 | Architecture & Design | System Architect, UI/UX Designer |
-| Frontend | React, Next.js, Vue.js devs |
-| Backend | Node.js, Python, Java, Go, .NET, API specialists |
+| Frontend | React, Next.js, Vue.js, Svelte devs |
+| Backend | Node.js, Python, Java, Go, .NET, Rust, API, Integration specialists |
 | Infrastructure | Database Admin, DevOps, Cloud Architect |
 | Quality & Security | QA, Security Engineer, Performance Engineer, Automation QA |
-| Other | Technical Writer, Debugging Expert, Full-Stack Dev, Mobile Dev |
+| Mobile | Flutter, React Native, Android (Kotlin/Java), iOS (Swift/Obj-C), Mobile Dev |
+| Other | Technical Writer, Debugging Expert, Full-Stack Dev |
 
 ## Code Quality Tools
 
@@ -141,7 +142,14 @@ agents:
 
 Pre-built workflows coordinate multiple agents:
 
-- `full_stack_web` - Full app (requirements → design → frontend → backend → testing)
+**Full lifecycle:**
+- `new_system` - Greenfield project, all phases (requirements → design → dev → test → docs → deployment → sign-off)
+- `add_feature` - Add a feature to an existing system with full quality gates
+- `bug_fix` - Diagnose, fix, and regression-test a bug
+- `full_audit` - Comprehensive health check of an existing system
+
+**Focused workflows:**
+- `full_stack_web` - Full web app (frontend + backend + database)
 - `api_service` - API design and implementation
 - `frontend_app` - UI/UX focused
 

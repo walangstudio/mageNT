@@ -32,6 +32,9 @@ class JavaBackend(BaseAgent):
             "Implement caching with Spring Cache",
             "Handle asynchronous processing",
             "Create scheduled tasks and batch jobs",
+            "Build reactive APIs with Spring WebFlux",
+            "Configure Spring Boot auto-configuration and starters",
+            "Implement messaging with Spring AMQP and Spring Kafka",
         ]
 
     @property
@@ -52,6 +55,9 @@ class JavaBackend(BaseAgent):
             "Use MapStruct for object mapping",
             "Implement OpenAPI documentation with SpringDoc",
             "Follow SOLID principles",
+            "Use Spring Boot DevTools for rapid development",
+            "Leverage Spring Boot Actuator for observability",
+            "Configure Spring Boot with application.yml and profiles",
         ]
 
     @property
