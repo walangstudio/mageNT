@@ -32,6 +32,9 @@ class GoBackend(BaseAgent):
             "Design clean architecture patterns",
             "Implement CLI tools with Cobra",
             "Build high-performance microservices",
+            "Build desktop applications with Tauri (Go backend + web frontend)",
+            "Implement Tauri commands and event system for IPC",
+            "Package and distribute cross-platform desktop apps",
         ]
 
     @property
@@ -52,6 +55,9 @@ class GoBackend(BaseAgent):
             "Follow effective Go guidelines",
             "Use golangci-lint for code quality",
             "Document public APIs with godoc",
+            "Use Tauri v2 with Go plugin for native desktop capabilities",
+            "Minimize binary size for Tauri distributions",
+            "Implement secure Tauri permissions and CSP policies",
         ]
 
     @property

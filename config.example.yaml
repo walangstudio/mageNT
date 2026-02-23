@@ -1,31 +1,47 @@
-# Software Development Team MCP Server Configuration
-# Copy this to config.yaml and customize for your needs
+# mageNT Configuration Template
+# Copy this file to config.yaml and enable the agents you want.
+# Run ./install.sh --update to merge new agent blocks into an existing config.yaml.
 
+# ─────────────────────────────────────────────────────────────────────────────
 # Agent Configuration
-# Enable/disable agents and customize their specializations
+# enabled: true/false — whether the agent is loaded and available as a tool
+# expertise_level: junior | mid | senior | principal
+# specialization: free-text shown in the agent's system prompt
+# ─────────────────────────────────────────────────────────────────────────────
 agents:
-  # Business & Analysis
+
+  # ── Business & Analysis ─────────────────────────────────────────────────
   business_analyst:
     enabled: true
     expertise_level: "senior"
     specialization: "Agile, User Stories, Requirements Engineering"
 
   product_manager:
-    enabled: false
+    enabled: true
     expertise_level: "senior"
     specialization: "Product Strategy, Roadmapping, Prioritization"
 
   system_architect:
-    enabled: false
+    enabled: true
     expertise_level: "principal"
     specialization: "Distributed Systems, Microservices, Cloud Architecture"
 
-  # Frontend Development
-  frontend_general:
+  ui_ux_designer:
     enabled: false
     expertise_level: "senior"
-    specialization: "HTML5, CSS3, JavaScript ES6+, Responsive Design"
+    specialization: "Figma, Wireframing, User Research, Design Systems"
 
+  technical_writer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "API Documentation, User Guides, Architecture Docs"
+
+  delivery_manager:
+    enabled: true
+    expertise_level: "principal"
+    specialization: "SDLC Completion, Delivery Readiness, Risk Management, Definition of Done"
+
+  # ── Frontend Development ─────────────────────────────────────────────────
   react_developer:
     enabled: true
     expertise_level: "senior"
@@ -41,52 +57,87 @@ agents:
     expertise_level: "senior"
     specialization: "Vue 3, Composition API, Pinia, TypeScript"
 
-  # Backend Development
-  backend_general:
+  svelte_developer:
     enabled: false
     expertise_level: "senior"
-    specialization: "REST APIs, Authentication, Database Design"
+    specialization: "Svelte, SvelteKit, Sapper, TypeScript, Vite"
 
+  # ── Backend Development ──────────────────────────────────────────────────
   nodejs_backend:
     enabled: true
     expertise_level: "senior"
     specialization: "Node.js, Express, TypeScript, JWT, PostgreSQL, Redis"
-
-  java_backend:
-    enabled: false
-    expertise_level: "senior"
-    specialization: "Spring Boot 3, JPA, Microservices, Maven"
 
   python_backend:
     enabled: false
     expertise_level: "senior"
     specialization: "FastAPI, SQLAlchemy, Pydantic, async/await"
 
+  java_backend:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Spring Boot 3, Spring Framework, JPA, Microservices, Maven, Gradle"
+
   go_backend:
     enabled: false
     expertise_level: "senior"
-    specialization: "Go 1.21+, Gin, GORM, goroutines"
+    specialization: "Go 1.21+, Gin, GORM, goroutines, Tauri"
 
   dotnet_backend:
     enabled: false
     expertise_level: "senior"
     specialization: ".NET 8, C# 12, ASP.NET Core, Entity Framework"
 
-  # Full-Stack
+  rust_backend:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Rust, Tokio, Axum, Actix-web, Cargo, WebAssembly"
+
+  # ── Full-Stack & API ─────────────────────────────────────────────────────
   fullstack_developer:
     enabled: false
     expertise_level: "senior"
     specialization: "React, Node.js, TypeScript, PostgreSQL"
 
-  # Mobile Development
+  api_developer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "REST, GraphQL, OpenAPI, API Design Patterns"
+
+  integration_specialist:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "REST/GraphQL APIs, Webhooks, Message Queues, ETL, Third-party SDKs"
+
+  # ── Mobile Development ───────────────────────────────────────────────────
   mobile_developer:
     enabled: false
     expertise_level: "senior"
     specialization: "React Native, Flutter, iOS, Android"
 
-  # Data & Infrastructure
-  database_administrator:
+  flutter_developer:
     enabled: false
+    expertise_level: "senior"
+    specialization: "Flutter, Dart, Riverpod, Bloc, Jetpack/SwiftUI interop"
+
+  react_native_developer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "React Native, Expo, TypeScript, React Navigation, EAS"
+
+  android_developer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Kotlin, Java, Jetpack Compose, MVVM, Hilt, Coroutines"
+
+  ios_developer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Swift, Objective-C, SwiftUI, UIKit, Combine, XCTest"
+
+  # ── Data & Infrastructure ────────────────────────────────────────────────
+  database_administrator:
+    enabled: true
     expertise_level: "senior"
     specialization: "PostgreSQL, MySQL, Schema Design, Query Optimization, Indexing"
 
@@ -100,11 +151,16 @@ agents:
     expertise_level: "principal"
     specialization: "AWS, Azure, GCP, Terraform, CloudFormation"
 
-  # Quality & Security
+  # ── Quality & Security ───────────────────────────────────────────────────
   qa_engineer:
+    enabled: true
+    expertise_level: "senior"
+    specialization: "Manual Testing, Test Strategy, Jest, Pytest, JUnit, Cucumber, BDD, TestRail, Xray, Postman, Playwright, Cypress, TDD"
+
+  automation_qa:
     enabled: false
     expertise_level: "senior"
-    specialization: "Jest, Pytest, Selenium, Test Automation, TDD"
+    specialization: "Playwright, Cypress, Selenium, WebdriverIO, Appium, Detox, k6, Gatling, Pact, Percy, Cucumber, BDD, GitHub Actions, Allure"
 
   security_engineer:
     enabled: false
@@ -116,28 +172,19 @@ agents:
     expertise_level: "senior"
     specialization: "Performance Profiling, Optimization, Load Testing"
 
-  # Specialized Roles
-  api_developer:
-    enabled: false
-    expertise_level: "senior"
-    specialization: "REST, GraphQL, OpenAPI, API Design Patterns"
+  debugging_expert:
+    enabled: true
+    expertise_level: "principal"
+    specialization: "Root Cause Analysis, Stack Traces, Performance Profiling, Log Analysis"
 
-  ui_ux_designer:
-    enabled: false
-    expertise_level: "senior"
-    specialization: "Figma, Wireframing, User Research, Design Systems"
-
-  technical_writer:
-    enabled: false
-    expertise_level: "senior"
-    specialization: "API Documentation, User Guides, Architecture Docs"
-
+# ─────────────────────────────────────────────────────────────────────────────
 # LLM Configuration
 # Default mode works with Claude Pro (no API key needed)
+# ─────────────────────────────────────────────────────────────────────────────
 llm:
   mode: "claude_pro"  # Options: claude_pro, api, local
 
-  # For API users (Phase 2)
+  # For API users
   api:
     provider: "anthropic"  # anthropic, openai, custom
     model: "claude-sonnet-4-20250514"
@@ -146,7 +193,7 @@ llm:
     max_tokens: 4096
     temperature: 0.7
 
-  # For local model users (Phase 3)
+  # For local model users
   local:
     provider: "ollama"  # ollama, lmstudio
     model: "llama3.1"
@@ -154,26 +201,146 @@ llm:
     max_tokens: 4096
     temperature: 0.7
 
+# ─────────────────────────────────────────────────────────────────────────────
 # Workflow Templates
-# Pre-defined agent sequences for common project types
+# ─────────────────────────────────────────────────────────────────────────────
 workflows:
-  # Full-stack web application
+
+  # ── Full lifecycle ───────────────────────────────────────────────────────
+
+  new_system:
+    enabled: true
+    description: "Full project lifecycle for a greenfield system — from idea to production-ready"
+    steps:
+      - agent: business_analyst
+        description: "Gather requirements, define scope, and write user stories"
+      - agent: product_manager
+        description: "Define product vision, prioritize features, and set success metrics"
+      - agent: system_architect
+        description: "Design overall system architecture, tech stack, and integration points"
+      - agent: ui_ux_designer
+        description: "Create wireframes, user flows, and design system"
+      - agent: technical_writer
+        description: "Plan documentation structure (API docs, user guide, runbook)"
+      - agent: api_developer
+        description: "Design API contracts and OpenAPI specification"
+      - agent: database_administrator
+        description: "Design database schema, indexing strategy, and migration plan"
+      - agent: devops_engineer
+        description: "Design CI/CD pipeline, environments, and infrastructure-as-code"
+      - agent: cloud_architect
+        description: "Design cloud infrastructure, scaling, and disaster recovery"
+      - agent: security_engineer
+        description: "Threat model, security controls, secrets management, and OWASP review"
+      - agent: qa_engineer
+        description: "Define test strategy — unit, integration, and contract tests"
+      - agent: automation_qa
+        description: "Design and implement end-to-end test suite"
+      - agent: performance_engineer
+        description: "Define performance benchmarks and load test plan"
+      - agent: technical_writer
+        description: "Write final API docs, user guide, and operational runbook"
+      - agent: delivery_manager
+        description: "Full completion audit — verify all phases, produce go/no-go report"
+
+  add_feature:
+    enabled: true
+    description: "Add a new feature to an existing system with full quality gates"
+    steps:
+      - agent: business_analyst
+        description: "Define feature requirements and acceptance criteria"
+      - agent: system_architect
+        description: "Assess impact on existing architecture and design changes"
+      - agent: ui_ux_designer
+        description: "Design UI changes and user flows for the new feature"
+      - agent: api_developer
+        description: "Update or extend API contracts as needed"
+      - agent: database_administrator
+        description: "Plan any schema changes or migrations"
+      - agent: security_engineer
+        description: "Review security implications of the new feature"
+      - agent: qa_engineer
+        description: "Write unit and integration tests for the feature"
+      - agent: automation_qa
+        description: "Extend end-to-end tests to cover the new feature"
+      - agent: technical_writer
+        description: "Update documentation to reflect the new feature"
+      - agent: delivery_manager
+        description: "Verify feature is complete against acceptance criteria and ready to ship"
+
+  bug_fix:
+    enabled: true
+    description: "Diagnose, fix, and validate a bug with full regression safety"
+    steps:
+      - agent: debugging_expert
+        description: "Analyze the bug, identify root cause, and propose fix"
+      - agent: system_architect
+        description: "Assess whether the bug reveals a deeper architectural issue"
+      - agent: security_engineer
+        description: "Check if the bug has security implications"
+      - agent: qa_engineer
+        description: "Write regression tests to prevent recurrence"
+      - agent: automation_qa
+        description: "Add or update end-to-end tests covering the affected flow"
+      - agent: technical_writer
+        description: "Update docs or changelog if the fix changes behaviour"
+      - agent: delivery_manager
+        description: "Confirm fix is complete, tested, and safe to deploy"
+
+  full_audit:
+    enabled: true
+    description: "Comprehensive health check of an existing system across all quality dimensions"
+    steps:
+      - agent: system_architect
+        description: "Review architecture for scalability, coupling, and technical debt"
+      - agent: security_engineer
+        description: "Full security audit — OWASP, secrets, auth, data exposure"
+      - agent: performance_engineer
+        description: "Profile application performance and identify bottlenecks"
+      - agent: database_administrator
+        description: "Audit database schema, indexes, queries, and backup strategy"
+      - agent: qa_engineer
+        description: "Assess test coverage and quality of existing test suite"
+      - agent: automation_qa
+        description: "Review end-to-end test coverage and reliability"
+      - agent: devops_engineer
+        description: "Audit CI/CD pipeline, deployment process, and observability"
+      - agent: technical_writer
+        description: "Audit documentation completeness and accuracy"
+      - agent: delivery_manager
+        description: "Consolidate findings into a prioritised remediation report"
+
+  # ── Focused workflows ────────────────────────────────────────────────────
+
   full_stack_web:
     enabled: true
     description: "Complete web application with frontend, backend, and database"
     steps:
       - agent: business_analyst
         description: "Gather requirements and create user stories"
+      - agent: system_architect
+        description: "Design system architecture"
+      - agent: ui_ux_designer
+        description: "Create wireframes and design system"
       - agent: react_developer
         description: "Design and implement frontend"
       - agent: nodejs_backend
         description: "Implement backend API"
       - agent: database_administrator
         description: "Design database schema"
+      - agent: security_engineer
+        description: "Security review and hardening"
       - agent: qa_engineer
-        description: "Create test suite"
+        description: "Create unit and integration test suite"
+      - agent: automation_qa
+        description: "Create end-to-end tests"
+      - agent: devops_engineer
+        description: "Set up CI/CD and deployment"
+      - agent: technical_writer
+        description: "Write user and API documentation"
+      - agent: delivery_manager
+        description: "Completion audit and go/no-go sign-off"
 
-  # REST API service
   api_service:
     enabled: true
     description: "Backend API service with database"
@@ -189,19 +356,44 @@ workflows:
       - agent: qa_engineer
         description: "Create API tests"
 
-  # Frontend application
   frontend_app:
     enabled: true
     description: "Single-page application or static site"
     steps:
       - agent: business_analyst
         description: "Gather UI/UX requirements"
+      - agent: ui_ux_designer
+        description: "Create wireframes and design system"
       - agent: react_developer
         description: "Implement frontend application"
       - agent: qa_engineer
         description: "Create frontend tests"
 
-  # Microservice
+  mobile_app:
+    enabled: true
+    description: "Cross-platform mobile application"
+    steps:
+      - agent: business_analyst
+        description: "Gather mobile app requirements"
+      - agent: ui_ux_designer
+        description: "Design mobile UI/UX"
+      - agent: mobile_developer
+        description: "Implement mobile application"
+      - agent: nodejs_backend
+        description: "Implement backend API"
+      - agent: database_administrator
+        description: "Design database schema"
+      - agent: security_engineer
+        description: "Mobile security review (storage, auth, transport)"
+      - agent: qa_engineer
+        description: "Create mobile unit and integration tests"
+      - agent: automation_qa
+        description: "Create mobile end-to-end tests"
+      - agent: technical_writer
+        description: "Write user guides and app store descriptions"
+      - agent: delivery_manager
+        description: "Completion audit and store submission readiness"
+
   microservice:
     enabled: false
     description: "Single microservice with deployment"
@@ -217,8 +409,34 @@ workflows:
       - agent: qa_engineer
         description: "Create test suite"
 
+  debug_project:
+    enabled: true
+    description: "Debug and fix issues in existing project"
+    steps:
+      - agent: debugging_expert
+        description: "Analyze issues and identify root causes"
+      - agent: qa_engineer
+        description: "Create regression tests"
+      - agent: performance_engineer
+        description: "Identify performance bottlenecks"
+
+  security_audit:
+    enabled: false
+    description: "Security review and hardening"
+    steps:
+      - agent: security_engineer
+        description: "Conduct security review"
+      - agent: qa_engineer
+        description: "Create security test cases"
+      - agent: devops_engineer
+        description: "Implement security configurations"
+      - agent: technical_writer
+        description: "Document security measures"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Server Configuration
+# ─────────────────────────────────────────────────────────────────────────────
 server:
-  name: "software-team-mcp"
-  version: "0.1.0"
+  name: "magent-mcp"
+  version: "0.2.0"
   description: "Multi-agent software development team MCP server"

@@ -27,6 +27,7 @@ from agents.business.product_manager import ProductManager
 from agents.business.system_architect import SystemArchitect
 from agents.business.ui_ux_designer import UIUXDesigner
 from agents.business.technical_writer import TechnicalWriter
+from agents.business.delivery_manager import DeliveryManager
 
 # Development agents
 from agents.development.react_developer import ReactDeveloper
@@ -40,6 +41,13 @@ from agents.development.java_backend import JavaBackend
 from agents.development.go_backend import GoBackend
 from agents.development.dotnet_backend import DotNetBackend
 from agents.development.mobile_developer import MobileDeveloper
+from agents.development.integration_specialist import IntegrationSpecialist
+from agents.development.rust_backend import RustBackend
+from agents.development.svelte_developer import SvelteDeveloper
+from agents.development.flutter_developer import FlutterDeveloper
+from agents.development.react_native_developer import ReactNativeDeveloper
+from agents.development.android_developer import AndroidDeveloper
+from agents.development.ios_developer import IOSDeveloper
 
 # Data agents
 from agents.data.database_administrator import DatabaseAdministrator
@@ -63,6 +71,7 @@ AGENT_CLASSES = {
     "system_architect": SystemArchitect,
     "ui_ux_designer": UIUXDesigner,
     "technical_writer": TechnicalWriter,
+    "delivery_manager": DeliveryManager,
     # Development
     "react_developer": ReactDeveloper,
     "nodejs_backend": NodeJSBackend,
@@ -75,6 +84,13 @@ AGENT_CLASSES = {
     "go_backend": GoBackend,
     "dotnet_backend": DotNetBackend,
     "mobile_developer": MobileDeveloper,
+    "integration_specialist": IntegrationSpecialist,
+    "rust_backend": RustBackend,
+    "svelte_developer": SvelteDeveloper,
+    "flutter_developer": FlutterDeveloper,
+    "react_native_developer": ReactNativeDeveloper,
+    "android_developer": AndroidDeveloper,
+    "ios_developer": IOSDeveloper,
     # Data
     "database_administrator": DatabaseAdministrator,
     # Quality

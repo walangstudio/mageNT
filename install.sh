@@ -9,6 +9,7 @@ MAGENT_DIR="$SCRIPT_DIR"
 # ── Defaults ────────────────────────────────────────────
 FORCE=false
 UNINSTALL=false
+UPDATE=false
 CLIENT="desktop"
 SKIP_TEST=false
 
@@ -21,6 +22,7 @@ Options:
   -c, --client TYPE   MCP client: desktop, code, both (default: desktop)
   -f, --force         Skip prompts, overwrite existing config
   -u, --uninstall     Remove mageNT from MCP client config
+      --update        Upgrade deps and merge new agents into existing config.yaml
       --skip-test     Skip test_server.py validation
   -h, --help          Show this help
 
@@ -28,6 +30,7 @@ Examples:
   ./install.sh                    Install for Claude Desktop
   ./install.sh -c code            Install for Claude Code
   ./install.sh -c both            Install for both
+  ./install.sh --update           Update deps and merge new agents into config
   ./install.sh -u                 Uninstall
   ./install.sh -f --skip-test     Force install, skip tests
 EOF
@@ -38,6 +41,7 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         -f|--force)     FORCE=true; shift ;;
         -u|--uninstall) UNINSTALL=true; shift ;;
+        --update)       UPDATE=true; shift ;;
         -c|--client)    CLIENT="$2"; shift 2 ;;
         --skip-test)    SKIP_TEST=true; shift ;;
         -h|--help)      show_help ;;
@@ -180,6 +184,67 @@ else:
 " "$config_path"
 }
 
+# ── Config migration (merge new keys without touching existing) ────────────
+migrate_config() {
+    local venv_python="$1"
+    local example="$MAGENT_DIR/config.example.yaml"
+    local config="$MAGENT_DIR/config.yaml"
+
+    [[ -f "$example" ]] || { info "No config.example.yaml found, skipping migration"; return 0; }
+    [[ -f "$config"  ]] || { info "No config.yaml found, skipping migration"; return 0; }
+
+    "$venv_python" -c "
+import sys
+
+try:
+    import yaml
+except ImportError:
+    print('  PyYAML not available, skipping config migration')
+    sys.exit(0)
+
+example_path = sys.argv[1]
+config_path  = sys.argv[2]
+
+with open(example_path) as f:
+    example = yaml.safe_load(f)
+
+with open(config_path) as f:
+    config = yaml.safe_load(f) or {}
+
+added_agents    = []
+added_workflows = []
+
+# Merge agents: add any key from example that is missing in config
+example_agents = example.get('agents', {}) or {}
+config_agents  = config.setdefault('agents', {})
+for name, block in example_agents.items():
+    if name not in config_agents:
+        # New agents arrive disabled so they don't change existing behaviour
+        new_block = dict(block)
+        new_block['enabled'] = False
+        config_agents[name] = new_block
+        added_agents.append(name)
+
+# Merge workflows: add any key from example that is missing in config
+example_workflows = example.get('workflows', {}) or {}
+config_workflows  = config.setdefault('workflows', {})
+for name, block in example_workflows.items():
+    if name not in config_workflows:
+        config_workflows[name] = block
+        added_workflows.append(name)
+
+with open(config_path, 'w') as f:
+    yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+if added_agents:
+    print('  New agents added (disabled): ' + ', '.join(added_agents))
+if added_workflows:
+    print('  New workflows added: ' + ', '.join(added_workflows))
+if not added_agents and not added_workflows:
+    print('  config.yaml already up to date')
+" "$example" "$config"
+}
+
 # ── Configure client ────────────────────────────────────
 configure_client() {
     local client_type="$1"
@@ -228,6 +293,8 @@ echo ""
 echo "  mageNT v${VERSION}"
 if [[ "$UNINSTALL" == true ]]; then
     echo "  Mode: uninstall"
+elif [[ "$UPDATE" == true ]]; then
+    echo "  Mode: update"
 else
     echo "  Mode: install (client: $CLIENT)"
 fi
@@ -274,7 +341,53 @@ if [[ "$UNINSTALL" == true ]]; then
     exit 0
 fi
 
-# ── Install path ────────────────────────────────────────
+# ── Update path ─────────────────────────────────────────
+if [[ "$UPDATE" == true ]]; then
+    # Need Python to update deps — use existing venv if available
+    VENV_PYTHON=$(get_venv_python 2>/dev/null) || true
+
+    if [[ -z "$VENV_PYTHON" || ! -f "$VENV_PYTHON" ]]; then
+        SYSTEM_PYTHON=$(find_python) || die "Python 3.10+ is required"
+        info "No venv found — creating one first..."
+        "$SYSTEM_PYTHON" -m venv "$MAGENT_DIR/.venv"
+        VENV_PYTHON=$(get_venv_python)
+    fi
+
+    # 1. Upgrade dependencies
+    info "Upgrading dependencies..."
+    "$VENV_PYTHON" -m pip install -r "$MAGENT_DIR/requirements.txt" --upgrade --quiet 2>&1 | tail -1 || true
+    ok "Dependencies upgraded"
+    echo ""
+
+    # 2. Merge new agents/workflows into existing config.yaml
+    info "Migrating config.yaml..."
+    migrate_config "$VENV_PYTHON"
+    echo ""
+
+    # 3. Run tests
+    if [[ "$SKIP_TEST" != true ]]; then
+        info "Validating installation..."
+        if "$VENV_PYTHON" "$MAGENT_DIR/test_server.py" > /dev/null 2>&1; then
+            ok "All tests passed"
+        else
+            err "Validation failed. Run 'python test_server.py' for details."
+        fi
+        echo ""
+    fi
+
+    # 4. Update marker
+    echo "$VERSION" > "$MAGENT_DIR/$MARKER_FILE"
+    ok "Marker updated to v${VERSION}"
+
+    echo "  ─────────────────────────────"
+    echo "  mageNT updated to v${VERSION}!"
+    echo ""
+    echo "  Restart Claude (quit fully, then reopen) to load new agents."
+    echo ""
+    exit 0
+fi
+
+# ── Install path ─────────────────────────────────────────
 
 # 1. Find Python
 info "Checking Python..."
