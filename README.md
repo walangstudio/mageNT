@@ -1,5 +1,11 @@
 # mageNT
 
+![version](https://img.shields.io/badge/version-0.3.0-blue)
+![python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
+![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)
+![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+![license](https://img.shields.io/badge/license-MIT-green)
+
 Give Claude a team of specialist developers through MCP. Works with Claude Desktop, Claude Code, or any MCP client.
 
 ## What's this?
@@ -16,11 +22,22 @@ Think of it like having 32 senior devs on standby, each with their own specialty
 
 Run the installer:
 
+**Linux / macOS / Git Bash (Windows):**
 ```bash
 cd mageNT
-./install.sh                    # for Claude Desktop
-./install.sh -c code            # for Claude Code
-./install.sh -c both            # for both
+./install.sh                         # for Claude Desktop
+./install.sh -c code                 # for Claude Code (workspace-local)
+./install.sh -c code --global        # for Claude Code (global user config)
+./install.sh -c both                 # for both
+```
+
+**Windows (Command Prompt / PowerShell):**
+```bat
+cd mageNT
+install.bat                          REM for Claude Desktop
+install.bat -c code                  REM for Claude Code (workspace-local)
+install.bat -c code --global         REM for Claude Code (global user config)
+install.bat -c both                  REM for both
 ```
 
 That's it. The installer handles everything - creates a venv, installs deps, configures your MCP client, runs tests.
@@ -29,6 +46,16 @@ Then just restart Claude and try:
 ```
 List the available agents
 ```
+
+### Updating
+
+```bash
+./install.sh --update              # upgrade deps + merge new agents into config
+./install.sh --update -c code      # upgrade + reconfigure Claude Code MCP path
+```
+
+Re-running the installer when already on the latest version exits cleanly with "Nothing to do."
+Use `-f` to force reinstall, or `--update -c code` to reconfigure MCP client paths.
 
 ## Manual Setup
 
@@ -54,7 +81,7 @@ Now add mageNT to your config:
 }
 ```
 
-**Claude Code** (create `.mcp.json` in your project):
+**Claude Code** — create `.mcp.json` in your workspace root (the directory you open in Claude Code):
 ```json
 {
   "mcpServers": {
@@ -65,6 +92,8 @@ Now add mageNT to your config:
   }
 }
 ```
+
+Or for global user config (`~/.claude/mcp.json` / `%USERPROFILE%\.claude\mcp.json`), same format.
 
 Paths need to be absolute. Use `\\` on Windows, `/` on Mac/Linux.
 
@@ -183,6 +212,7 @@ Register it in `server.py` and add to `config.yaml`.
 
 **Agents not showing up?**
 - Check your config path is correct and absolute
+- For Claude Code: `.mcp.json` must be in the workspace root (the folder you open), not inside `mageNT/`
 - Actually restart Claude (quit it completely)
 - Run `python server.py` to see any errors
 
@@ -202,8 +232,9 @@ pip install -r requirements.txt
 mageNT/
 ├── server.py           # MCP server
 ├── config.yaml         # Your settings
-├── install.sh          # Automated installer
-├── agents/             # The 24 agents
+├── install.sh          # Automated installer (Linux/macOS/Git Bash)
+├── install.bat         # Automated installer (Windows CMD/PowerShell)
+├── agents/             # The 32 agents
 ├── rules/              # Code quality rules
 ├── hooks/              # Automation hooks
 ├── workflows/          # Multi-agent workflows

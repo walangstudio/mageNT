@@ -48,6 +48,7 @@ from agents.development.flutter_developer import FlutterDeveloper
 from agents.development.react_native_developer import ReactNativeDeveloper
 from agents.development.android_developer import AndroidDeveloper
 from agents.development.ios_developer import IOSDeveloper
+from agents.development.php_developer import PHPDeveloper
 
 # Data agents
 from agents.data.database_administrator import DatabaseAdministrator
@@ -91,6 +92,7 @@ AGENT_CLASSES = {
     "react_native_developer": ReactNativeDeveloper,
     "android_developer": AndroidDeveloper,
     "ios_developer": IOSDeveloper,
+    "php_developer": PHPDeveloper,
     # Data
     "database_administrator": DatabaseAdministrator,
     # Quality
