@@ -1,670 +1,577 @@
-# Software Development Team MCP Server Configuration
-# Copy this to config.yaml and customize for your needs
-
-# Agent Configuration
-# Enable/disable agents and customize their specializations
 agents:
-  # Business & Analysis
   business_analyst:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Agile, User Stories, Requirements Engineering"
-
+    expertise_level: principal
+    specialization: Agile, User Stories, Requirements Engineering
   product_manager:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Product Strategy, Roadmapping, Prioritization"
-
+    expertise_level: principal
+    specialization: Product Strategy, Roadmapping, Prioritization
   system_architect:
     enabled: true
-    expertise_level: "principal"
-    specialization: "Distributed Systems, Microservices, Cloud Architecture"
-
+    expertise_level: principal
+    specialization: Distributed Systems, Microservices, Cloud Architecture
   ui_ux_designer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Figma, Wireframing, User Research, Design Systems"
-
+    expertise_level: principal
+    specialization: Figma, Wireframing, User Research, Design Systems
   technical_writer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "API Documentation, User Guides, Architecture Docs"
-
-  # Frontend Development
+    expertise_level: principal
+    specialization: API Documentation, User Guides, Architecture Docs
   react_developer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "React 18, TypeScript, Hooks, Context API, Tailwind CSS, Vite"
-
+    expertise_level: principal
+    specialization: React 18, TypeScript, Hooks, Context API, Tailwind CSS, Vite
   nextjs_developer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Next.js 14, App Router, Server Components, TypeScript"
-
+    expertise_level: principal
+    specialization: Next.js 14, App Router, Server Components, TypeScript
   vue_developer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Vue 3, Composition API, Pinia, TypeScript"
-
-  # Backend Development
+    expertise_level: principal
+    specialization: Vue 3, Composition API, Pinia, TypeScript
   nodejs_backend:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Node.js, Express, TypeScript, JWT, PostgreSQL, Redis"
-
+    expertise_level: principal
+    specialization: Node.js, Express, TypeScript, JWT, PostgreSQL, Redis
   python_backend:
     enabled: true
-    expertise_level: "senior"
-    specialization: "FastAPI, SQLAlchemy, Pydantic, async/await"
-
+    expertise_level: principal
+    specialization: FastAPI, SQLAlchemy, Pydantic, async/await
   java_backend:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Spring Boot 3, Spring Framework, JPA, Microservices, Maven, Gradle"
-
+    expertise_level: principal
+    specialization: Spring Boot 3, Spring Framework, JPA, Microservices, Maven, Gradle
   go_backend:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Go 1.21+, Gin, GORM, goroutines, Tauri"
-
+    expertise_level: principal
+    specialization: Go 1.21+, Gin, GORM, goroutines, Tauri
   dotnet_backend:
     enabled: true
-    expertise_level: "senior"
-    specialization: ".NET 8, C# 12, ASP.NET Core, Entity Framework"
-
+    expertise_level: principal
+    specialization: .NET 8, C# 12, ASP.NET Core, Entity Framework
   delivery_manager:
     enabled: true
-    expertise_level: "principal"
-    specialization: "SDLC Completion, Delivery Readiness, Risk Management, Definition of Done"
-
-  # Full-Stack & Mobile
+    expertise_level: principal
+    specialization: SDLC Completion, Delivery Readiness, Risk Management, Definition
+      of Done
   fullstack_developer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "React, Node.js, TypeScript, PostgreSQL"
-
+    expertise_level: principal
+    specialization: React, Node.js, TypeScript, PostgreSQL
   mobile_developer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "React Native, Flutter, iOS, Android"
-
+    expertise_level: principal
+    specialization: React Native, Flutter, iOS, Android
   flutter_developer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Flutter, Dart, Riverpod, Bloc, Jetpack/SwiftUI interop"
-
+    expertise_level: principal
+    specialization: Flutter, Dart, Riverpod, Bloc, Jetpack/SwiftUI interop
   react_native_developer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "React Native, Expo, TypeScript, React Navigation, EAS"
-
+    expertise_level: principal
+    specialization: React Native, Expo, TypeScript, React Navigation, EAS
   android_developer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Kotlin, Java, Jetpack Compose, MVVM, Hilt, Coroutines"
-
+    expertise_level: principal
+    specialization: Kotlin, Java, Jetpack Compose, MVVM, Hilt, Coroutines
   ios_developer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Swift, Objective-C, SwiftUI, UIKit, Combine, XCTest"
-
+    expertise_level: principal
+    specialization: Swift, Objective-C, SwiftUI, UIKit, Combine, XCTest
   api_developer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "REST, GraphQL, OpenAPI, API Design Patterns"
-
+    expertise_level: principal
+    specialization: REST, GraphQL, OpenAPI, API Design Patterns
   svelte_developer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Svelte, SvelteKit, Sapper, TypeScript, Vite"
-
+    expertise_level: principal
+    specialization: Svelte, SvelteKit, Sapper, TypeScript, Vite
   integration_specialist:
     enabled: true
-    expertise_level: "senior"
-    specialization: "REST/GraphQL APIs, Webhooks, Message Queues, ETL, Third-party SDKs"
-
+    expertise_level: principal
+    specialization: REST/GraphQL APIs, Webhooks, Message Queues, ETL, Third-party
+      SDKs
   rust_backend:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Rust, Tokio, Axum, Actix-web, Cargo, WebAssembly"
-
-  # Data & Infrastructure
+    expertise_level: principal
+    specialization: Rust, Tokio, Axum, Actix-web, Cargo, WebAssembly
+  php_developer:
+    enabled: true
+    expertise_level: principal
+    specialization: PHP 8.3, Laravel, Symfony, Composer, MySQL, Redis, REST APIs
   database_administrator:
     enabled: true
-    expertise_level: "senior"
-    specialization: "PostgreSQL, MySQL, Schema Design, Query Optimization, Indexing"
-
+    expertise_level: principal
+    specialization: PostgreSQL, MySQL, Schema Design, Query Optimization, Indexing
   devops_engineer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Docker, Kubernetes, CI/CD, GitHub Actions, Jenkins"
-
+    expertise_level: principal
+    specialization: Docker, Kubernetes, CI/CD, GitHub Actions, Jenkins
   cloud_architect:
     enabled: true
-    expertise_level: "principal"
-    specialization: "AWS, Azure, GCP, Terraform, CloudFormation"
-
-  # Quality & Security
+    expertise_level: principal
+    specialization: AWS, Azure, GCP, Terraform, CloudFormation
   qa_engineer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Manual Testing, Test Strategy, Jest, Pytest, JUnit, Cucumber, BDD, TestRail, Xray, Postman, Playwright, Cypress, TDD"
-
+    expertise_level: principal
+    specialization: Manual Testing, Test Strategy, Jest, Pytest, JUnit, Cucumber,
+      BDD, TestRail, Xray, Postman, Playwright, Cypress, TDD
   security_engineer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "OWASP, Penetration Testing, Security Audits, Encryption"
-
+    expertise_level: principal
+    specialization: OWASP, Penetration Testing, Security Audits, Encryption
   performance_engineer:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Performance Profiling, Optimization, Load Testing"
-
+    expertise_level: principal
+    specialization: Performance Profiling, Optimization, Load Testing
   automation_qa:
     enabled: true
-    expertise_level: "senior"
-    specialization: "Playwright, Cypress, Selenium, WebdriverIO, Appium, Detox, k6, Gatling, Pact, Percy, Cucumber, BDD, GitHub Actions, Allure"
-
+    expertise_level: principal
+    specialization: Playwright, Cypress, Selenium, WebdriverIO, Appium, Detox, k6,
+      Gatling, Pact, Percy, Cucumber, BDD, GitHub Actions, Allure
   debugging_expert:
     enabled: true
-    expertise_level: "principal"
-    specialization: "Root Cause Analysis, Stack Traces, Performance Profiling, Log Analysis"
-
-# LLM Configuration
-# Default mode works with Claude Pro (no API key needed)
+    expertise_level: principal
+    specialization: Root Cause Analysis, Stack Traces, Performance Profiling, Log
+      Analysis
 llm:
-  mode: "claude_pro"  # Options: claude_pro, api, local
-
-  # For API users (Phase 2)
+  mode: claude_pro
   api:
-    provider: "anthropic"  # anthropic, openai, custom
-    model: "claude-sonnet-4-20250514"
-    api_key_env: "ANTHROPIC_API_KEY"
-    base_url: null  # For custom OpenAI-compatible APIs
+    provider: anthropic
+    model: claude-sonnet-4-20250514
+    api_key_env: ANTHROPIC_API_KEY
+    base_url: null
     max_tokens: 4096
     temperature: 0.7
-
-  # For local model users (Phase 3)
   local:
-    provider: "ollama"  # ollama, lmstudio
-    model: "llama3.1"
-    base_url: "http://localhost:11434"
+    provider: ollama
+    model: llama3.1
+    base_url: http://localhost:11434
     max_tokens: 4096
     temperature: 0.7
-
-# Workflow Templates
-# Pre-defined agent sequences for common project types
 workflows:
-  # Full-stack web application
   full_stack_web:
     enabled: true
-    description: "Complete web application with frontend, backend, and database"
+    description: Complete web application with frontend, backend, and database
     steps:
-      - agent: business_analyst
-        description: "Gather requirements and create user stories"
-      - agent: system_architect
-        description: "Design system architecture"
-      - agent: ui_ux_designer
-        description: "Create wireframes and design system"
-      - agent: react_developer
-        description: "Design and implement frontend"
-      - agent: nodejs_backend
-        description: "Implement backend API"
-      - agent: database_administrator
-        description: "Design database schema"
-      - agent: security_engineer
-        description: "Security review and hardening"
-      - agent: qa_engineer
-        description: "Create unit and integration test suite"
-      - agent: automation_qa
-        description: "Create end-to-end tests"
-      - agent: devops_engineer
-        description: "Set up CI/CD and deployment"
-      - agent: technical_writer
-        description: "Write user and API documentation"
-      - agent: delivery_manager
-        description: "Completion audit and go/no-go sign-off"
-
-  # REST API service
+    - agent: business_analyst
+      description: Gather requirements and create user stories
+    - agent: system_architect
+      description: Design system architecture
+    - agent: ui_ux_designer
+      description: Create wireframes and design system
+    - agent: react_developer
+      description: Design and implement frontend
+    - agent: nodejs_backend
+      description: Implement backend API
+    - agent: database_administrator
+      description: Design database schema
+    - agent: security_engineer
+      description: Security review and hardening
+    - agent: qa_engineer
+      description: Create unit and integration test suite
+    - agent: automation_qa
+      description: Create end-to-end tests
+    - agent: devops_engineer
+      description: Set up CI/CD and deployment
+    - agent: technical_writer
+      description: Write user and API documentation
+    - agent: delivery_manager
+      description: Completion audit and go/no-go sign-off
   api_service:
     enabled: true
-    description: "Backend API service with database"
+    description: Backend API service with database
     steps:
-      - agent: business_analyst
-        description: "Define API requirements"
-      - agent: api_developer
-        description: "Design API endpoints and OpenAPI spec"
-      - agent: nodejs_backend
-        description: "Implement API service"
-      - agent: database_administrator
-        description: "Design database schema"
-      - agent: qa_engineer
-        description: "Create API tests"
-
-  # Frontend application
+    - agent: business_analyst
+      description: Define API requirements
+    - agent: api_developer
+      description: Design API endpoints and OpenAPI spec
+    - agent: nodejs_backend
+      description: Implement API service
+    - agent: database_administrator
+      description: Design database schema
+    - agent: qa_engineer
+      description: Create API tests
   frontend_app:
     enabled: true
-    description: "Single-page application or static site"
+    description: Single-page application or static site
     steps:
-      - agent: business_analyst
-        description: "Gather UI/UX requirements"
-      - agent: ui_ux_designer
-        description: "Create wireframes and design system"
-      - agent: react_developer
-        description: "Implement frontend application"
-      - agent: qa_engineer
-        description: "Create frontend tests"
-
-  # Next.js full-stack application
+    - agent: business_analyst
+      description: Gather UI/UX requirements
+    - agent: ui_ux_designer
+      description: Create wireframes and design system
+    - agent: react_developer
+      description: Implement frontend application
+    - agent: qa_engineer
+      description: Create frontend tests
   nextjs_app:
     enabled: true
-    description: "Next.js full-stack application with App Router"
+    description: Next.js full-stack application with App Router
     steps:
-      - agent: business_analyst
-        description: "Gather requirements"
-      - agent: system_architect
-        description: "Design application architecture"
-      - agent: nextjs_developer
-        description: "Implement Next.js application"
-      - agent: database_administrator
-        description: "Design database schema"
-      - agent: qa_engineer
-        description: "Create test suite"
-      - agent: devops_engineer
-        description: "Set up deployment (Vercel/Docker)"
-
-  # Python FastAPI service
+    - agent: business_analyst
+      description: Gather requirements
+    - agent: system_architect
+      description: Design application architecture
+    - agent: nextjs_developer
+      description: Implement Next.js application
+    - agent: database_administrator
+      description: Design database schema
+    - agent: qa_engineer
+      description: Create test suite
+    - agent: devops_engineer
+      description: Set up deployment (Vercel/Docker)
   python_api:
     enabled: true
-    description: "Python FastAPI backend service"
+    description: Python FastAPI backend service
     steps:
-      - agent: business_analyst
-        description: "Define API requirements"
-      - agent: api_developer
-        description: "Design API endpoints"
-      - agent: python_backend
-        description: "Implement FastAPI service"
-      - agent: database_administrator
-        description: "Design database schema"
-      - agent: qa_engineer
-        description: "Create pytest test suite"
-
-  # Mobile application
+    - agent: business_analyst
+      description: Define API requirements
+    - agent: api_developer
+      description: Design API endpoints
+    - agent: python_backend
+      description: Implement FastAPI service
+    - agent: database_administrator
+      description: Design database schema
+    - agent: qa_engineer
+      description: Create pytest test suite
   mobile_app:
     enabled: true
-    description: "Cross-platform mobile application"
+    description: Cross-platform mobile application
     steps:
-      - agent: business_analyst
-        description: "Gather mobile app requirements"
-      - agent: ui_ux_designer
-        description: "Design mobile UI/UX"
-      - agent: mobile_developer
-        description: "Implement mobile application"
-      - agent: nodejs_backend
-        description: "Implement backend API"
-      - agent: database_administrator
-        description: "Design database schema"
-      - agent: security_engineer
-        description: "Mobile security review (storage, auth, transport)"
-      - agent: qa_engineer
-        description: "Create mobile unit and integration tests"
-      - agent: automation_qa
-        description: "Create mobile end-to-end tests"
-      - agent: technical_writer
-        description: "Write user guides and app store descriptions"
-      - agent: delivery_manager
-        description: "Completion audit and store submission readiness"
-
-  # Security audit workflow
+    - agent: business_analyst
+      description: Gather mobile app requirements
+    - agent: ui_ux_designer
+      description: Design mobile UI/UX
+    - agent: mobile_developer
+      description: Implement mobile application
+    - agent: nodejs_backend
+      description: Implement backend API
+    - agent: database_administrator
+      description: Design database schema
+    - agent: security_engineer
+      description: Mobile security review (storage, auth, transport)
+    - agent: qa_engineer
+      description: Create mobile unit and integration tests
+    - agent: automation_qa
+      description: Create mobile end-to-end tests
+    - agent: technical_writer
+      description: Write user guides and app store descriptions
+    - agent: delivery_manager
+      description: Completion audit and store submission readiness
   security_audit:
     enabled: true
-    description: "Security review and hardening"
+    description: Security review and hardening
     steps:
-      - agent: security_engineer
-        description: "Conduct security review"
-      - agent: qa_engineer
-        description: "Create security test cases"
-      - agent: devops_engineer
-        description: "Implement security configurations"
-      - agent: technical_writer
-        description: "Document security measures"
-
-  # DevOps setup workflow
+    - agent: security_engineer
+      description: Conduct security review
+    - agent: qa_engineer
+      description: Create security test cases
+    - agent: devops_engineer
+      description: Implement security configurations
+    - agent: technical_writer
+      description: Document security measures
   devops_setup:
     enabled: true
-    description: "CI/CD and infrastructure setup"
+    description: CI/CD and infrastructure setup
     steps:
-      - agent: devops_engineer
-        description: "Design CI/CD pipeline"
-      - agent: cloud_architect
-        description: "Design cloud infrastructure"
-      - agent: security_engineer
-        description: "Implement security best practices"
-      - agent: technical_writer
-        description: "Create runbooks and documentation"
-
-  # Microservice
+    - agent: devops_engineer
+      description: Design CI/CD pipeline
+    - agent: cloud_architect
+      description: Design cloud infrastructure
+    - agent: security_engineer
+      description: Implement security best practices
+    - agent: technical_writer
+      description: Create runbooks and documentation
   microservice:
     enabled: true
-    description: "Single microservice with deployment"
+    description: Single microservice with deployment
     steps:
-      - agent: system_architect
-        description: "Design microservice architecture"
-      - agent: nodejs_backend
-        description: "Implement service"
-      - agent: database_administrator
-        description: "Design data model"
-      - agent: devops_engineer
-        description: "Create CI/CD pipeline and Docker setup"
-      - agent: qa_engineer
-        description: "Create test suite"
-
-  # Debugging workflow
+    - agent: system_architect
+      description: Design microservice architecture
+    - agent: nodejs_backend
+      description: Implement service
+    - agent: database_administrator
+      description: Design data model
+    - agent: devops_engineer
+      description: Create CI/CD pipeline and Docker setup
+    - agent: qa_engineer
+      description: Create test suite
   debug_project:
     enabled: true
-    description: "Debug and fix issues in existing project"
+    description: Debug and fix issues in existing project
     steps:
-      - agent: debugging_expert
-        description: "Analyze issues and identify root causes"
-      - agent: qa_engineer
-        description: "Create regression tests"
-      - agent: performance_engineer
-        description: "Identify performance bottlenecks"
-
-  # Performance optimization workflow
+    - agent: debugging_expert
+      description: Analyze issues and identify root causes
+    - agent: qa_engineer
+      description: Create regression tests
+    - agent: performance_engineer
+      description: Identify performance bottlenecks
   performance_optimization:
     enabled: true
-    description: "Optimize application performance"
+    description: Optimize application performance
     steps:
-      - agent: performance_engineer
-        description: "Profile and identify bottlenecks"
-      - agent: database_administrator
-        description: "Optimize database queries and indexes"
-      - agent: devops_engineer
-        description: "Implement caching and infrastructure optimizations"
-      - agent: qa_engineer
-        description: "Create performance test suite"
-
-  # Data pipeline workflow
+    - agent: performance_engineer
+      description: Profile and identify bottlenecks
+    - agent: database_administrator
+      description: Optimize database queries and indexes
+    - agent: devops_engineer
+      description: Implement caching and infrastructure optimizations
+    - agent: qa_engineer
+      description: Create performance test suite
   data_pipeline:
     enabled: true
-    description: "Data processing pipeline"
+    description: Data processing pipeline
     steps:
-      - agent: business_analyst
-        description: "Define data requirements"
-      - agent: python_backend
-        description: "Implement data processing logic"
-      - agent: database_administrator
-        description: "Design data storage"
-      - agent: qa_engineer
-        description: "Create data validation tests"
-      - agent: devops_engineer
-        description: "Set up pipeline scheduling"
-
-  # ETL service workflow
+    - agent: business_analyst
+      description: Define data requirements
+    - agent: python_backend
+      description: Implement data processing logic
+    - agent: database_administrator
+      description: Design data storage
+    - agent: qa_engineer
+      description: Create data validation tests
+    - agent: devops_engineer
+      description: Set up pipeline scheduling
   etl_service:
     enabled: true
-    description: "ETL service for data integration"
+    description: ETL service for data integration
     steps:
-      - agent: business_analyst
-        description: "Define data sources and targets"
-      - agent: system_architect
-        description: "Design ETL architecture"
-      - agent: python_backend
-        description: "Implement ETL jobs"
-      - agent: database_administrator
-        description: "Design staging and target schemas"
-      - agent: devops_engineer
-        description: "Set up orchestration and monitoring"
-
-  # Enterprise API workflow
+    - agent: business_analyst
+      description: Define data sources and targets
+    - agent: system_architect
+      description: Design ETL architecture
+    - agent: python_backend
+      description: Implement ETL jobs
+    - agent: database_administrator
+      description: Design staging and target schemas
+    - agent: devops_engineer
+      description: Set up orchestration and monitoring
   enterprise_api:
     enabled: true
-    description: "Enterprise-grade API with security and scalability"
+    description: Enterprise-grade API with security and scalability
     steps:
-      - agent: business_analyst
-        description: "Gather enterprise requirements"
-      - agent: system_architect
-        description: "Design scalable API architecture"
-      - agent: api_developer
-        description: "Design API contracts and versioning"
-      - agent: nodejs_backend
-        description: "Implement API service"
-      - agent: security_engineer
-        description: "Implement security controls"
-      - agent: qa_engineer
-        description: "Create comprehensive test suite"
-      - agent: devops_engineer
-        description: "Set up high-availability deployment"
-
-  # SaaS platform workflow
+    - agent: business_analyst
+      description: Gather enterprise requirements
+    - agent: system_architect
+      description: Design scalable API architecture
+    - agent: api_developer
+      description: Design API contracts and versioning
+    - agent: nodejs_backend
+      description: Implement API service
+    - agent: security_engineer
+      description: Implement security controls
+    - agent: qa_engineer
+      description: Create comprehensive test suite
+    - agent: devops_engineer
+      description: Set up high-availability deployment
   saas_platform:
     enabled: true
-    description: "Multi-tenant SaaS application"
+    description: Multi-tenant SaaS application
     steps:
-      - agent: business_analyst
-        description: "Define SaaS requirements and pricing model"
-      - agent: product_manager
-        description: "Define feature roadmap and go-to-market strategy"
-      - agent: system_architect
-        description: "Design multi-tenant architecture"
-      - agent: ui_ux_designer
-        description: "Design product UI and onboarding flows"
-      - agent: fullstack_developer
-        description: "Implement core platform"
-      - agent: database_administrator
-        description: "Design tenant-aware database"
-      - agent: security_engineer
-        description: "Implement tenant isolation and security controls"
-      - agent: qa_engineer
-        description: "Create test suite including tenant isolation tests"
-      - agent: automation_qa
-        description: "Create end-to-end tests for critical user flows"
-      - agent: devops_engineer
-        description: "Set up scalable infrastructure and CI/CD"
-      - agent: technical_writer
-        description: "Write product documentation and API references"
-      - agent: delivery_manager
-        description: "Completion audit and launch readiness sign-off"
-
-  # Multi-tenant application workflow
+    - agent: business_analyst
+      description: Define SaaS requirements and pricing model
+    - agent: product_manager
+      description: Define feature roadmap and go-to-market strategy
+    - agent: system_architect
+      description: Design multi-tenant architecture
+    - agent: ui_ux_designer
+      description: Design product UI and onboarding flows
+    - agent: fullstack_developer
+      description: Implement core platform
+    - agent: database_administrator
+      description: Design tenant-aware database
+    - agent: security_engineer
+      description: Implement tenant isolation and security controls
+    - agent: qa_engineer
+      description: Create test suite including tenant isolation tests
+    - agent: automation_qa
+      description: Create end-to-end tests for critical user flows
+    - agent: devops_engineer
+      description: Set up scalable infrastructure and CI/CD
+    - agent: technical_writer
+      description: Write product documentation and API references
+    - agent: delivery_manager
+      description: Completion audit and launch readiness sign-off
   multi_tenant_app:
     enabled: true
-    description: "Multi-tenant application with data isolation"
+    description: Multi-tenant application with data isolation
     steps:
-      - agent: business_analyst
-        description: "Define tenant requirements"
-      - agent: system_architect
-        description: "Design tenant architecture"
-      - agent: nodejs_backend
-        description: "Implement multi-tenant backend"
-      - agent: database_administrator
-        description: "Design tenant data isolation"
-      - agent: security_engineer
-        description: "Implement access controls and tenant isolation"
-      - agent: qa_engineer
-        description: "Create test suite including tenant boundary tests"
-      - agent: devops_engineer
-        description: "Set up deployment and infrastructure"
-      - agent: delivery_manager
-        description: "Completion audit and readiness check"
-
-  # Legacy migration workflow
+    - agent: business_analyst
+      description: Define tenant requirements
+    - agent: system_architect
+      description: Design tenant architecture
+    - agent: nodejs_backend
+      description: Implement multi-tenant backend
+    - agent: database_administrator
+      description: Design tenant data isolation
+    - agent: security_engineer
+      description: Implement access controls and tenant isolation
+    - agent: qa_engineer
+      description: Create test suite including tenant boundary tests
+    - agent: devops_engineer
+      description: Set up deployment and infrastructure
+    - agent: delivery_manager
+      description: Completion audit and readiness check
   legacy_migration:
     enabled: true
-    description: "Modernize legacy system"
+    description: Modernize legacy system
     steps:
-      - agent: system_architect
-        description: "Analyze legacy system and design migration strategy"
-      - agent: nodejs_backend
-        description: "Implement new services"
-      - agent: database_administrator
-        description: "Plan data migration and schema changes"
-      - agent: security_engineer
-        description: "Security review of migrated system"
-      - agent: qa_engineer
-        description: "Create migration tests and regression suite"
-      - agent: devops_engineer
-        description: "Set up blue-green deployment and rollback plan"
-      - agent: technical_writer
-        description: "Document changes and update runbooks"
-      - agent: delivery_manager
-        description: "Migration readiness audit and cutover sign-off"
-
-  # ─────────────────────────────────────────────────────────────
-  # Full lifecycle workflows
-  # ─────────────────────────────────────────────────────────────
-
+    - agent: system_architect
+      description: Analyze legacy system and design migration strategy
+    - agent: nodejs_backend
+      description: Implement new services
+    - agent: database_administrator
+      description: Plan data migration and schema changes
+    - agent: security_engineer
+      description: Security review of migrated system
+    - agent: qa_engineer
+      description: Create migration tests and regression suite
+    - agent: devops_engineer
+      description: Set up blue-green deployment and rollback plan
+    - agent: technical_writer
+      description: Document changes and update runbooks
+    - agent: delivery_manager
+      description: Migration readiness audit and cutover sign-off
   new_system:
     enabled: true
-    description: "Full project lifecycle for a greenfield system — from idea to production-ready"
+    description: Full project lifecycle for a greenfield system — from idea to production-ready
     steps:
-      - agent: business_analyst
-        description: "Gather requirements, define scope, and write user stories"
-      - agent: product_manager
-        description: "Define product vision, prioritize features, and set success metrics"
-      - agent: system_architect
-        description: "Design overall system architecture, tech stack, and integration points"
-      - agent: ui_ux_designer
-        description: "Create wireframes, user flows, and design system"
-      - agent: technical_writer
-        description: "Plan documentation structure (API docs, user guide, runbook)"
-      - agent: api_developer
-        description: "Design API contracts and OpenAPI specification"
-      - agent: database_administrator
-        description: "Design database schema, indexing strategy, and migration plan"
-      - agent: devops_engineer
-        description: "Design CI/CD pipeline, environments, and infrastructure-as-code"
-      - agent: cloud_architect
-        description: "Design cloud infrastructure, scaling, and disaster recovery"
-      - agent: security_engineer
-        description: "Threat model, security controls, secrets management, and OWASP review"
-      - agent: qa_engineer
-        description: "Define test strategy — unit, integration, and contract tests"
-      - agent: automation_qa
-        description: "Design and implement end-to-end test suite"
-      - agent: performance_engineer
-        description: "Define performance benchmarks and load test plan"
-      - agent: technical_writer
-        description: "Write final API docs, user guide, and operational runbook"
-      - agent: delivery_manager
-        description: "Full completion audit — verify all phases, produce go/no-go report"
-
+    - agent: business_analyst
+      description: Gather requirements, define scope, and write user stories
+    - agent: product_manager
+      description: Define product vision, prioritize features, and set success metrics
+    - agent: system_architect
+      description: Design overall system architecture, tech stack, and integration
+        points
+    - agent: ui_ux_designer
+      description: Create wireframes, user flows, and design system
+    - agent: technical_writer
+      description: Plan documentation structure (API docs, user guide, runbook)
+    - agent: api_developer
+      description: Design API contracts and OpenAPI specification
+    - agent: database_administrator
+      description: Design database schema, indexing strategy, and migration plan
+    - agent: devops_engineer
+      description: Design CI/CD pipeline, environments, and infrastructure-as-code
+    - agent: cloud_architect
+      description: Design cloud infrastructure, scaling, and disaster recovery
+    - agent: security_engineer
+      description: Threat model, security controls, secrets management, and OWASP
+        review
+    - agent: qa_engineer
+      description: Define test strategy — unit, integration, and contract tests
+    - agent: automation_qa
+      description: Design and implement end-to-end test suite
+    - agent: performance_engineer
+      description: Define performance benchmarks and load test plan
+    - agent: technical_writer
+      description: Write final API docs, user guide, and operational runbook
+    - agent: delivery_manager
+      description: Full completion audit — verify all phases, produce go/no-go report
   add_feature:
     enabled: true
-    description: "Add a new feature to an existing system with full quality gates"
+    description: Add a new feature to an existing system with full quality gates
     steps:
-      - agent: business_analyst
-        description: "Define feature requirements and acceptance criteria"
-      - agent: system_architect
-        description: "Assess impact on existing architecture and design changes"
-      - agent: ui_ux_designer
-        description: "Design UI changes and user flows for the new feature"
-      - agent: api_developer
-        description: "Update or extend API contracts as needed"
-      - agent: database_administrator
-        description: "Plan any schema changes or migrations"
-      - agent: security_engineer
-        description: "Review security implications of the new feature"
-      - agent: qa_engineer
-        description: "Write unit and integration tests for the feature"
-      - agent: automation_qa
-        description: "Extend end-to-end tests to cover the new feature"
-      - agent: technical_writer
-        description: "Update documentation to reflect the new feature"
-      - agent: delivery_manager
-        description: "Verify feature is complete against acceptance criteria and ready to ship"
-
+    - agent: business_analyst
+      description: Define feature requirements and acceptance criteria
+    - agent: system_architect
+      description: Assess impact on existing architecture and design changes
+    - agent: ui_ux_designer
+      description: Design UI changes and user flows for the new feature
+    - agent: api_developer
+      description: Update or extend API contracts as needed
+    - agent: database_administrator
+      description: Plan any schema changes or migrations
+    - agent: security_engineer
+      description: Review security implications of the new feature
+    - agent: qa_engineer
+      description: Write unit and integration tests for the feature
+    - agent: automation_qa
+      description: Extend end-to-end tests to cover the new feature
+    - agent: technical_writer
+      description: Update documentation to reflect the new feature
+    - agent: delivery_manager
+      description: Verify feature is complete against acceptance criteria and ready
+        to ship
   bug_fix:
     enabled: true
-    description: "Diagnose, fix, and validate a bug with full regression safety"
+    description: Diagnose, fix, and validate a bug with full regression safety
     steps:
-      - agent: debugging_expert
-        description: "Analyze the bug, identify root cause, and propose fix"
-      - agent: system_architect
-        description: "Assess whether the bug reveals a deeper architectural issue"
-      - agent: security_engineer
-        description: "Check if the bug has security implications"
-      - agent: qa_engineer
-        description: "Write regression tests to prevent recurrence"
-      - agent: automation_qa
-        description: "Add or update end-to-end tests covering the affected flow"
-      - agent: technical_writer
-        description: "Update docs or changelog if the fix changes behaviour"
-      - agent: delivery_manager
-        description: "Confirm fix is complete, tested, and safe to deploy"
-
+    - agent: debugging_expert
+      description: Analyze the bug, identify root cause, and propose fix
+    - agent: system_architect
+      description: Assess whether the bug reveals a deeper architectural issue
+    - agent: security_engineer
+      description: Check if the bug has security implications
+    - agent: qa_engineer
+      description: Write regression tests to prevent recurrence
+    - agent: automation_qa
+      description: Add or update end-to-end tests covering the affected flow
+    - agent: technical_writer
+      description: Update docs or changelog if the fix changes behaviour
+    - agent: delivery_manager
+      description: Confirm fix is complete, tested, and safe to deploy
   full_audit:
     enabled: true
-    description: "Comprehensive health check of an existing system across all quality dimensions"
+    description: Comprehensive health check of an existing system across all quality
+      dimensions
     steps:
-      - agent: system_architect
-        description: "Review architecture for scalability, coupling, and technical debt"
-      - agent: security_engineer
-        description: "Full security audit — OWASP, secrets, auth, data exposure"
-      - agent: performance_engineer
-        description: "Profile application performance and identify bottlenecks"
-      - agent: database_administrator
-        description: "Audit database schema, indexes, queries, and backup strategy"
-      - agent: qa_engineer
-        description: "Assess test coverage and quality of existing test suite"
-      - agent: automation_qa
-        description: "Review end-to-end test coverage and reliability"
-      - agent: devops_engineer
-        description: "Audit CI/CD pipeline, deployment process, and observability"
-      - agent: technical_writer
-        description: "Audit documentation completeness and accuracy"
-      - agent: delivery_manager
-        description: "Consolidate findings into a prioritised remediation report"
-
-# Skills Configuration
+    - agent: system_architect
+      description: Review architecture for scalability, coupling, and technical debt
+    - agent: security_engineer
+      description: Full security audit — OWASP, secrets, auth, data exposure
+    - agent: performance_engineer
+      description: Profile application performance and identify bottlenecks
+    - agent: database_administrator
+      description: Audit database schema, indexes, queries, and backup strategy
+    - agent: qa_engineer
+      description: Assess test coverage and quality of existing test suite
+    - agent: automation_qa
+      description: Review end-to-end test coverage and reliability
+    - agent: devops_engineer
+      description: Audit CI/CD pipeline, deployment process, and observability
+    - agent: technical_writer
+      description: Audit documentation completeness and accuracy
+    - agent: delivery_manager
+      description: Consolidate findings into a prioritised remediation report
 skills:
   scaffold:
     enabled: true
     commands:
-      - "/scaffold-react"
-      - "/scaffold-nextjs"
-      - "/scaffold-fastapi"
-      - "/scaffold-express"
+    - /scaffold-react
+    - /scaffold-nextjs
+    - /scaffold-fastapi
+    - /scaffold-express
   analysis:
     enabled: true
     commands:
-      - "/debug"
-      - "/analyze-error"
+    - /debug
+    - /analyze-error
   testing:
     enabled: true
     commands:
-      - "/run-tests"
-      - "/generate-tests"
+    - /run-tests
+    - /generate-tests
   version:
     enabled: true
     commands:
-      - "/check-versions"
+    - /check-versions
   security:
     enabled: true
     commands:
-      - "/security-scan"
-
-# Rules Configuration
-# Code quality rules that work with ANY LLM
+    - /security-scan
 rules:
   enabled: true
-
-  # Enable/disable rule categories
   categories:
-    security: true      # Secrets detection, SQL injection, XSS prevention
-    coding_style: true  # File size, debug statements, naming conventions
-    testing: true       # Test coverage, naming, assertions
-    git: true          # Commit messages, branch naming
-    performance: true   # N+1 queries, async patterns, memoization
-
-  # Minimum severity to report (error, warning, info)
-  min_severity: "info"
-
-  # Fail on warnings (stricter mode)
+    security: true
+    coding_style: true
+    testing: true
+    git: true
+    performance: true
+  min_severity: info
   fail_on_warnings: false
-
-  # Rule-specific settings
   rule_settings:
     file-size-limit:
       max_lines: 400
@@ -672,33 +579,19 @@ rules:
       max_lines: 50
     test-coverage-minimum:
       min_coverage: 80
-
-# Hooks Configuration
-# Automation hooks that work with ANY LLM
 hooks:
   enabled: true
-
-  # Enable/disable specific hooks
   disabled_hooks: []
-  # disabled_hooks:
-  #   - "auto-format"
-  #   - "log-tool-usage"
-
-  # Continue processing on hook failure
   continue_on_failure: false
-
-  # Hook types to enable
   enabled_types:
-    - pre_tool
-    - post_tool
-    - pre_edit
-    - post_edit
-    - pre_commit
-    - session_start
-    - session_end
-
-# Server Configuration
+  - pre_tool
+  - post_tool
+  - pre_edit
+  - post_edit
+  - pre_commit
+  - session_start
+  - session_end
 server:
-  name: "magent-mcp"
-  version: "0.4.0"
-  description: "Multi-agent software development team MCP server with rules and hooks"
+  name: magent-mcp
+  version: 0.4.0
+  description: Multi-agent software development team MCP server with rules and hooks

@@ -18,6 +18,7 @@ from .flutter_developer import FlutterDeveloper
 from .react_native_developer import ReactNativeDeveloper
 from .android_developer import AndroidDeveloper
 from .ios_developer import IOSDeveloper
+from .php_developer import PHPDeveloper
 
 __all__ = [
     "ReactDeveloper",
@@ -38,4 +39,5 @@ __all__ = [
     "ReactNativeDeveloper",
     "AndroidDeveloper",
     "IOSDeveloper",
+    "PHPDeveloper",
 ]

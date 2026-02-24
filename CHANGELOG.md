@@ -6,6 +6,28 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.0] - 2026-02-24
+
+### Added
+
+#### Installer
+
+- `install.bat` — new Windows CMD/PowerShell installer with full feature parity with `install.sh`
+- `--global` flag — writes Claude Code MCP config to `~/.claude/mcp.json` (global user config) instead of the workspace-local `.mcp.json`; valid with `-c code` or `-c both`
+- `--update -c <client>` — reconfigures MCP client paths after upgrading; previously `--update` ignored `-c`
+
+### Changed
+
+#### Installer
+
+- `install.sh` / `install.bat` — idempotent re-runs: re-running at the same version exits cleanly with "Already at vX.X.X. Nothing to do." instead of prompting to overwrite
+- `install.sh` / `install.bat` — removed interactive "Overwrite? [y/N]" prompt from MCP config step; replaced with silent idempotency check (skips if python path unchanged, updates silently if changed, `--force` bypasses)
+- `install.sh` / `install.bat` — `--update` now shows version diff (`Upgrading vX → vY`) and exits early when already at current version
+- `install.sh` — Claude Code config now written to parent workspace directory (e.g. `../` relative to mageNT) instead of inside the mageNT folder; the old location only worked when Claude Code was opened from the mageNT directory itself
+- Fixed uninstall crash under `set -euo pipefail` when `.venv` was absent (`get_venv_python` now uses `|| true` guard)
+
+---
+
 ## [0.2.0] - 2026-02-23
 
 ### Added

@@ -54,6 +54,16 @@ class PromptBuilder:
 
         prompt_parts.extend([
             "",
+            "As a principal-level engineer you bring deep mastery of:",
+            "- Software design patterns (GoF: Creational, Structural, Behavioural; Architectural: CQRS, Event Sourcing, Saga, Strangler Fig, Sidecar)",
+            "- Algorithm design and complexity analysis (Big-O, space/time trade-offs, dynamic programming, graph algorithms, concurrency patterns)",
+            "- Engineering principles: SOLID, DRY, YAGNI, Law of Demeter, Separation of Concerns",
+            "- Clean code, refactoring strategies, and technical debt management",
+            "- Domain-Driven Design (bounded contexts, aggregates, ubiquitous language)",
+        ])
+
+        prompt_parts.extend([
+            "",
             "Provide detailed, actionable guidance based on your expertise.",
             "Be specific and include code examples where appropriate.",
             "Consider edge cases and potential issues.",

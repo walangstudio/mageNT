@@ -12,6 +12,8 @@ UNINSTALL=false
 UPDATE=false
 CLIENT="desktop"
 SKIP_TEST=false
+GLOBAL_CONFIG=false
+CLIENT_EXPLICIT=false
 
 # ── Parse flags ─────────────────────────────────────────
 show_help() {
@@ -23,15 +25,20 @@ Options:
   -f, --force         Skip prompts, overwrite existing config
   -u, --uninstall     Remove mageNT from MCP client config
       --update        Upgrade deps and merge new agents into existing config.yaml
+      --global        Write Claude Code config to ~/.claude/mcp.json (global)
+                      Default (no --global): writes to parent workspace dir
       --skip-test     Skip test_server.py validation
   -h, --help          Show this help
 
 Examples:
   ./install.sh                    Install for Claude Desktop
-  ./install.sh -c code            Install for Claude Code
+  ./install.sh -c code            Install for Claude Code (workspace-local)
+  ./install.sh -c code --global   Install for Claude Code (global config)
   ./install.sh -c both            Install for both
-  ./install.sh --update           Update deps and merge new agents into config
+  ./install.sh --update           Upgrade deps & config
+  ./install.sh --update -c code   Upgrade + reconfigure Claude Code MCP path
   ./install.sh -u                 Uninstall
+  ./install.sh -u --global        Uninstall from global Claude Code config
   ./install.sh -f --skip-test     Force install, skip tests
 EOF
     exit 0
@@ -42,7 +49,8 @@ while [[ $# -gt 0 ]]; do
         -f|--force)     FORCE=true; shift ;;
         -u|--uninstall) UNINSTALL=true; shift ;;
         --update)       UPDATE=true; shift ;;
-        -c|--client)    CLIENT="$2"; shift 2 ;;
+        -c|--client)    CLIENT="$2"; CLIENT_EXPLICIT=true; shift 2 ;;
+        --global)       GLOBAL_CONFIG=true; shift ;;
         --skip-test)    SKIP_TEST=true; shift ;;
         -h|--help)      show_help ;;
         *) echo "Unknown option: $1"; show_help ;;
@@ -55,8 +63,17 @@ ok()    { echo "  OK: $*"; }
 err()   { echo "  ERROR: $*" >&2; }
 die()   { err "$*"; exit 1; }
 
+if [[ "$GLOBAL_CONFIG" == true && "$CLIENT" != "code" && "$CLIENT" != "both" ]]; then
+    die "--global is only valid with -c code or -c both"
+fi
+
 get_version() {
     grep '__version__' "$MAGENT_DIR/__init__.py" | sed 's/.*"\(.*\)".*/\1/'
+}
+
+get_installed_version() {
+    local marker="$MAGENT_DIR/$MARKER_FILE"
+    [[ -f "$marker" ]] && cat "$marker" || echo ""
 }
 
 # ── Python detection ────────────────────────────────────
@@ -114,7 +131,11 @@ get_desktop_config_path() {
 }
 
 get_code_config_path() {
-    echo "$MAGENT_DIR/.mcp.json"
+    if [[ "$GLOBAL_CONFIG" == true ]]; then
+        echo "$HOME/.claude/mcp.json"
+    else
+        echo "$(dirname "$MAGENT_DIR")/.mcp.json"
+    fi
 }
 
 # ── JSON operations (uses Python, no jq needed) ────────
@@ -265,20 +286,24 @@ configure_client() {
     if [[ "$UNINSTALL" == true ]]; then
         remove_mcp_config "$config_path" "$venv_python"
     else
-        # Check if already configured
         if [[ -f "$config_path" ]] && [[ "$FORCE" != true ]]; then
-            if "$venv_python" -c "
+            current_cmd=$("$venv_python" -c "
 import json, sys
 try:
     with open(sys.argv[1]) as f:
         c = json.load(f)
-    if 'magent' in c.get('mcpServers', {}):
-        sys.exit(0)
+    entry = c.get('mcpServers', {}).get('magent', {})
+    print(entry.get('command', ''))
 except: pass
-sys.exit(1)
-" "$config_path" 2>/dev/null; then
-                read -rp "  magent already in config. Overwrite? [y/N] " answer
-                [[ "$answer" =~ ^[Yy]$ ]] || { info "Skipped"; return 0; }
+" "$config_path" 2>/dev/null) || true
+
+            if [[ -n "$current_cmd" ]]; then
+                if [[ "$current_cmd" == "$venv_python" ]]; then
+                    info "MCP config already up to date"
+                    return 0
+                else
+                    info "Updating MCP config (python path changed)"
+                fi
             fi
         fi
 
@@ -289,8 +314,12 @@ sys.exit(1)
 
 # ── Banner ──────────────────────────────────────────────
 VERSION=$(get_version)
+INSTALLED_VERSION=$(get_installed_version)
 echo ""
 echo "  mageNT v${VERSION}"
+if [[ "$UPDATE" == true && -n "$INSTALLED_VERSION" && "$INSTALLED_VERSION" != "$VERSION" ]]; then
+    echo "  Upgrading from v${INSTALLED_VERSION}"
+fi
 if [[ "$UNINSTALL" == true ]]; then
     echo "  Mode: uninstall"
 elif [[ "$UPDATE" == true ]]; then
@@ -303,9 +332,9 @@ echo ""
 
 # ── Uninstall path ──────────────────────────────────────
 if [[ "$UNINSTALL" == true ]]; then
-    VENV_PYTHON=$(get_venv_python)
+    VENV_PYTHON=$(get_venv_python 2>/dev/null) || true
 
-    if [[ ! -f "$VENV_PYTHON" ]]; then
+    if [[ -z "$VENV_PYTHON" || ! -f "$VENV_PYTHON" ]]; then
         # Fall back to system python for JSON ops
         VENV_PYTHON=$(find_python) || die "Python not found"
     fi
@@ -343,6 +372,23 @@ fi
 
 # ── Update path ─────────────────────────────────────────
 if [[ "$UPDATE" == true ]]; then
+    if [[ -n "$INSTALLED_VERSION" ]]; then
+        if [[ "$INSTALLED_VERSION" == "$VERSION" ]]; then
+            if [[ "$CLIENT_EXPLICIT" != true && "$FORCE" != true ]]; then
+                info "Already at v${VERSION}. Nothing to do."
+                info "Use --update -c code|both to also reconfigure MCP client."
+                echo ""
+                exit 0
+            fi
+            info "Already at v${VERSION} — reconfiguring MCP client"
+        else
+            info "Upgrading v${INSTALLED_VERSION} → v${VERSION}"
+        fi
+    else
+        info "No marker found — running full update"
+    fi
+    echo ""
+
     # Need Python to update deps — use existing venv if available
     VENV_PYTHON=$(get_venv_python 2>/dev/null) || true
 
@@ -363,6 +409,20 @@ if [[ "$UPDATE" == true ]]; then
     info "Migrating config.yaml..."
     migrate_config "$VENV_PYTHON"
     echo ""
+
+    # 2b. Reconfigure MCP client if -c was explicitly passed
+    if [[ "$CLIENT_EXPLICIT" == true ]]; then
+        info "Reconfiguring MCP client ($CLIENT)..."
+        SERVER_PY="$MAGENT_DIR/server.py"
+        if [[ "$CLIENT" == "both" ]]; then
+            configure_client "desktop" "$VENV_PYTHON" "$SERVER_PY"
+            echo ""
+            configure_client "code" "$VENV_PYTHON" "$SERVER_PY"
+        else
+            configure_client "$CLIENT" "$VENV_PYTHON" "$SERVER_PY"
+        fi
+        echo ""
+    fi
 
     # 3. Run tests
     if [[ "$SKIP_TEST" != true ]]; then
@@ -388,6 +448,14 @@ if [[ "$UPDATE" == true ]]; then
 fi
 
 # ── Install path ─────────────────────────────────────────
+
+# Early exit if already at this version
+if [[ -n "$INSTALLED_VERSION" && "$INSTALLED_VERSION" == "$VERSION" && "$FORCE" != true ]]; then
+    info "Already at v${VERSION}. Nothing to do."
+    info "Use --update to upgrade dependencies, or -f to force reinstall."
+    echo ""
+    exit 0
+fi
 
 # 1. Find Python
 info "Checking Python..."
