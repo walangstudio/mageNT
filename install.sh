@@ -21,38 +21,43 @@ show_help() {
 Usage: ./install.sh [options]
 
 Options:
-  -c, --client TYPE   MCP client: desktop, code, both (default: desktop)
+  -c, --client TYPE   MCP client: desktop, code, kilo, opencode, goose, all (default: desktop)
   -f, --force         Skip prompts, overwrite existing config
   -u, --uninstall     Remove mageNT from MCP client config
-      --update        Upgrade deps and merge new agents into existing config.yaml
-      --global        Write Claude Code config to ~/.claude/mcp.json (global)
+      --upgrade       Upgrade deps and merge new agents into existing config.yaml
+      --update        Alias for --upgrade
+      --global        Write to global config path (applies to: code, opencode, all)
                       Default (no --global): writes to parent workspace dir
       --skip-test     Skip test_server.py validation
   -h, --help          Show this help
 
 Examples:
-  ./install.sh                    Install for Claude Desktop
-  ./install.sh -c code            Install for Claude Code (workspace-local)
-  ./install.sh -c code --global   Install for Claude Code (global config)
-  ./install.sh -c both            Install for both
-  ./install.sh --update           Upgrade deps & config
-  ./install.sh --update -c code   Upgrade + reconfigure Claude Code MCP path
-  ./install.sh -u                 Uninstall
-  ./install.sh -u --global        Uninstall from global Claude Code config
-  ./install.sh -f --skip-test     Force install, skip tests
+  ./install.sh                      Install for Claude Desktop
+  ./install.sh -c code              Install for Claude Code (workspace-local)
+  ./install.sh -c code --global     Install for Claude Code (global config)
+  ./install.sh -c kilo              Install for Kilo Code (workspace-local)
+  ./install.sh -c opencode          Install for OpenCode (workspace-local)
+  ./install.sh -c opencode --global Install for OpenCode (global)
+  ./install.sh -c goose             Install for Goose
+  ./install.sh -c all               Install for all detected clients
+  ./install.sh --upgrade            Upgrade deps & config
+  ./install.sh --upgrade -c code    Upgrade + reconfigure Claude Code MCP path
+  ./install.sh -u                   Uninstall
+  ./install.sh -u -c all            Uninstall from all client configs
+  ./install.sh -f --skip-test       Force install, skip tests
 EOF
     exit 0
 }
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -f|--force)     FORCE=true; shift ;;
-        -u|--uninstall) UNINSTALL=true; shift ;;
-        --update)       UPDATE=true; shift ;;
-        -c|--client)    CLIENT="$2"; CLIENT_EXPLICIT=true; shift 2 ;;
-        --global)       GLOBAL_CONFIG=true; shift ;;
-        --skip-test)    SKIP_TEST=true; shift ;;
-        -h|--help)      show_help ;;
+        -f|--force)          FORCE=true; shift ;;
+        -u|--uninstall)      UNINSTALL=true; shift ;;
+        --update|--upgrade)  UPDATE=true; shift ;;
+        -c|--client)         CLIENT="$2"; CLIENT_EXPLICIT=true; shift 2 ;;
+        --global)            GLOBAL_CONFIG=true; shift ;;
+        --skip-test)         SKIP_TEST=true; shift ;;
+        -h|--help)           show_help ;;
         *) echo "Unknown option: $1"; show_help ;;
     esac
 done
@@ -63,8 +68,11 @@ ok()    { echo "  OK: $*"; }
 err()   { echo "  ERROR: $*" >&2; }
 die()   { err "$*"; exit 1; }
 
-if [[ "$GLOBAL_CONFIG" == true && "$CLIENT" != "code" && "$CLIENT" != "both" ]]; then
-    die "--global is only valid with -c code or -c both"
+if [[ "$GLOBAL_CONFIG" == true ]]; then
+    case "$CLIENT" in
+        code|both|opencode|all) ;;
+        *) die "--global is only valid with -c code, opencode, both, or all" ;;
+    esac
 fi
 
 get_version() {
@@ -94,9 +102,8 @@ find_python() {
     return 1
 }
 
-# ── Venv python path ───────────────────────────────────
+# ── Venv python path ────────────────────────────────────
 get_venv_python() {
-    # Check both layouts (Windows creates Scripts/, some setups create bin/)
     if [[ -f "$MAGENT_DIR/.venv/Scripts/python.exe" ]]; then
         echo "$MAGENT_DIR/.venv/Scripts/python.exe"
     elif [[ -f "$MAGENT_DIR/.venv/bin/python" ]]; then
@@ -110,7 +117,7 @@ get_venv_python() {
     fi
 }
 
-# ── MCP config paths ───────────────────────────────────
+# ── MCP config paths ─────────────────────────────────────
 get_desktop_config_path() {
     case "$(uname -s)" in
         Darwin)
@@ -131,14 +138,36 @@ get_desktop_config_path() {
 }
 
 get_code_config_path() {
+    echo "$(dirname "$MAGENT_DIR")/.mcp.json"
+}
+
+get_global_code_config_paths() {
+    local found=()
+    [[ -f "$HOME/.claude.json"     ]] && found+=("$HOME/.claude.json")
+    [[ -f "$HOME/.claude/mcp.json" ]] && found+=("$HOME/.claude/mcp.json")
+    if [[ ${#found[@]} -eq 0 ]]; then
+        found+=("$HOME/.claude.json")
+    fi
+    printf '%s\n' "${found[@]}"
+}
+
+get_kilo_config_path() {
+    echo "$(dirname "$MAGENT_DIR")/.kilocode/mcp.json"
+}
+
+get_opencode_config_path() {
     if [[ "$GLOBAL_CONFIG" == true ]]; then
-        echo "$HOME/.claude/mcp.json"
+        echo "$HOME/.config/opencode/opencode.json"
     else
-        echo "$(dirname "$MAGENT_DIR")/.mcp.json"
+        echo "$(dirname "$MAGENT_DIR")/opencode.json"
     fi
 }
 
-# ── JSON operations (uses Python, no jq needed) ────────
+get_goose_config_path() {
+    echo "$HOME/.config/goose/config.yaml"
+}
+
+# ── JSON/YAML operations (uses Python, no jq needed) ─────
 merge_mcp_config() {
     local config_path="$1"
     local server_py="$2"
@@ -152,7 +181,6 @@ merge_mcp_config() {
 import json, sys, os
 
 config_path = os.path.abspath(sys.argv[1])
-# Use sys.executable for the real native Python path
 python_path = sys.executable
 server_py = os.path.abspath(sys.argv[2])
 
@@ -205,7 +233,162 @@ else:
 " "$config_path"
 }
 
-# ── Config migration (merge new keys without touching existing) ────────────
+merge_opencode_config() {
+    local config_path="$1"
+    local _venv_python="$2"
+    shift 2
+    local extra_args=("$@")
+
+    if [[ -f "$config_path" ]]; then
+        cp "$config_path" "${config_path}.backup.$(date +%Y%m%d%H%M%S)"
+        info "Backed up existing config"
+    fi
+
+    "$_venv_python" -c "
+import json, sys, os
+
+config_path = os.path.abspath(sys.argv[1])
+python_path = sys.executable
+extra_args = sys.argv[2:]
+
+try:
+    with open(config_path) as f:
+        config = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    config = {}
+
+config.setdefault('mcp', {})
+config['mcp']['magent'] = {'type': 'local', 'command': [python_path] + extra_args}
+
+d = os.path.dirname(config_path)
+if d:
+    os.makedirs(d, exist_ok=True)
+with open(config_path, 'w') as f:
+    json.dump(config, f, indent=2)
+    f.write('\n')
+" "$config_path" "${extra_args[@]}"
+}
+
+remove_opencode_config() {
+    local config_path="$1"
+    local _venv_python="$2"
+
+    [[ -f "$config_path" ]] || return 0
+    cp "$config_path" "${config_path}.backup.$(date +%Y%m%d%H%M%S)"
+
+    "$_venv_python" -c "
+import json, sys, os
+
+config_path = sys.argv[1]
+try:
+    with open(config_path) as f:
+        config = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    sys.exit(0)
+
+mcp = config.get('mcp', {})
+if 'magent' in mcp:
+    del mcp['magent']
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=2)
+        f.write('\n')
+    print('  Removed magent from config')
+else:
+    print('  magent not found in config')
+" "$config_path"
+}
+
+merge_goose_config() {
+    local config_path="$1"
+    local _venv_python="$2"
+    shift 2
+    local extra_args=("$@")
+
+    if [[ -f "$config_path" ]]; then
+        cp "$config_path" "${config_path}.backup.$(date +%Y%m%d%H%M%S)"
+        info "Backed up existing config"
+    fi
+
+    "$_venv_python" -c "
+import sys, os
+
+try:
+    import yaml
+except ImportError:
+    python_path = sys.executable
+    extra_args = sys.argv[2:]
+    print('  PyYAML not available. Add manually to ~/.config/goose/config.yaml:')
+    print('  extensions:')
+    print('    magent:')
+    print('      name: magent')
+    print('      type: stdio')
+    print('      cmd: ' + python_path)
+    print('      args: ' + str(extra_args))
+    print('      enabled: true')
+    sys.exit(0)
+
+config_path = os.path.abspath(sys.argv[1])
+python_path = sys.executable
+extra_args = sys.argv[2:]
+
+try:
+    with open(config_path) as f:
+        config = yaml.safe_load(f) or {}
+except FileNotFoundError:
+    config = {}
+
+config.setdefault('extensions', {})
+config['extensions']['magent'] = {
+    'name': 'magent',
+    'type': 'stdio',
+    'cmd': python_path,
+    'args': extra_args,
+    'enabled': True,
+}
+
+d = os.path.dirname(config_path)
+if d:
+    os.makedirs(d, exist_ok=True)
+with open(config_path, 'w') as f:
+    yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+" "$config_path" "${extra_args[@]}"
+}
+
+remove_goose_config() {
+    local config_path="$1"
+    local _venv_python="$2"
+
+    [[ -f "$config_path" ]] || return 0
+    cp "$config_path" "${config_path}.backup.$(date +%Y%m%d%H%M%S)"
+
+    "$_venv_python" -c "
+import sys, os
+
+try:
+    import yaml
+except ImportError:
+    print('  PyYAML not available, cannot auto-remove from Goose config')
+    sys.exit(0)
+
+config_path = sys.argv[1]
+try:
+    with open(config_path) as f:
+        config = yaml.safe_load(f) or {}
+except FileNotFoundError:
+    sys.exit(0)
+
+ext = config.get('extensions', {})
+if 'magent' in ext:
+    del ext['magent']
+    with open(config_path, 'w') as f:
+        yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    print('  Removed magent from config')
+else:
+    print('  magent not found in config')
+" "$config_path"
+}
+
+# ── Config migration ─────────────────────────────────────
 migrate_config() {
     local venv_python="$1"
     local example="$MAGENT_DIR/config.example.yaml"
@@ -235,18 +418,15 @@ with open(config_path) as f:
 added_agents    = []
 added_workflows = []
 
-# Merge agents: add any key from example that is missing in config
 example_agents = example.get('agents', {}) or {}
 config_agents  = config.setdefault('agents', {})
 for name, block in example_agents.items():
     if name not in config_agents:
-        # New agents arrive disabled so they don't change existing behaviour
         new_block = dict(block)
         new_block['enabled'] = False
         config_agents[name] = new_block
         added_agents.append(name)
 
-# Merge workflows: add any key from example that is missing in config
 example_workflows = example.get('workflows', {}) or {}
 config_workflows  = config.setdefault('workflows', {})
 for name, block in example_workflows.items():
@@ -266,20 +446,11 @@ if not added_agents and not added_workflows:
 " "$example" "$config"
 }
 
-# ── Configure client ────────────────────────────────────
-configure_client() {
-    local client_type="$1"
+# ── Configure client ─────────────────────────────────────
+_configure_one_path() {
+    local config_path="$1"
     local venv_python="$2"
     local server_py="$3"
-    local config_path
-
-    if [[ "$client_type" == "desktop" ]]; then
-        config_path=$(get_desktop_config_path)
-        info "Client: Claude Desktop"
-    else
-        config_path=$(get_code_config_path)
-        info "Client: Claude Code"
-    fi
 
     info "Config: $config_path"
 
@@ -297,13 +468,11 @@ try:
 except: pass
 " "$config_path" 2>/dev/null) || true
 
-            if [[ -n "$current_cmd" ]]; then
-                if [[ "$current_cmd" == "$venv_python" ]]; then
-                    info "MCP config already up to date"
-                    return 0
-                else
-                    info "Updating MCP config (python path changed)"
-                fi
+            if [[ -n "$current_cmd" && "$current_cmd" == "$venv_python" ]]; then
+                info "MCP config already up to date"
+                return 0
+            elif [[ -n "$current_cmd" ]]; then
+                info "Updating MCP config (python path changed)"
             fi
         fi
 
@@ -312,7 +481,89 @@ except: pass
     fi
 }
 
-# ── Banner ──────────────────────────────────────────────
+configure_client() {
+    local client_type="$1"
+    local venv_python="$2"
+    local server_py="$3"
+
+    case "$client_type" in
+        desktop)
+            info "Client: Claude Desktop"
+            _configure_one_path "$(get_desktop_config_path)" "$venv_python" "$server_py"
+            ;;
+        code)
+            if [[ "$GLOBAL_CONFIG" == true ]]; then
+                info "Client: Claude Code (global)"
+                while IFS= read -r config_path; do
+                    _configure_one_path "$config_path" "$venv_python" "$server_py"
+                done < <(get_global_code_config_paths)
+            else
+                info "Client: Claude Code (workspace)"
+                _configure_one_path "$(get_code_config_path)" "$venv_python" "$server_py"
+            fi
+            ;;
+        kilo)
+            info "Client: Kilo Code"
+            _configure_one_path "$(get_kilo_config_path)" "$venv_python" "$server_py"
+            ;;
+        opencode)
+            info "Client: OpenCode"
+            local opencode_path
+            opencode_path="$(get_opencode_config_path)"
+            info "Config: $opencode_path"
+            if [[ "$UNINSTALL" == true ]]; then
+                remove_opencode_config "$opencode_path" "$venv_python"
+            else
+                merge_opencode_config "$opencode_path" "$venv_python" "$server_py"
+                ok "MCP config updated"
+            fi
+            ;;
+        goose)
+            info "Client: Goose"
+            local goose_path
+            goose_path="$(get_goose_config_path)"
+            info "Config: $goose_path"
+            if [[ "$UNINSTALL" == true ]]; then
+                remove_goose_config "$goose_path" "$venv_python"
+            else
+                merge_goose_config "$goose_path" "$venv_python" "$server_py"
+                ok "MCP config updated"
+            fi
+            ;;
+        both)
+            configure_client "desktop" "$venv_python" "$server_py"
+            echo ""
+            configure_client "code" "$venv_python" "$server_py"
+            ;;
+        all)
+            configure_client "desktop" "$venv_python" "$server_py"
+            echo ""
+            configure_client "code" "$venv_python" "$server_py"
+            local _kilo_path _opencode_ws _opencode_global _goose_path
+            _kilo_path="$(get_kilo_config_path)"
+            _opencode_ws="$(dirname "$MAGENT_DIR")/opencode.json"
+            _opencode_global="$HOME/.config/opencode/opencode.json"
+            _goose_path="$(get_goose_config_path)"
+            if [[ "$UNINSTALL" == true ]] || [[ -f "$_kilo_path" ]]; then
+                echo ""
+                configure_client "kilo" "$venv_python" "$server_py"
+            fi
+            if [[ "$UNINSTALL" == true ]] || [[ -f "$_opencode_ws" ]] || [[ -f "$_opencode_global" ]]; then
+                echo ""
+                configure_client "opencode" "$venv_python" "$server_py"
+            fi
+            if [[ "$UNINSTALL" == true ]] || [[ -f "$_goose_path" ]]; then
+                echo ""
+                configure_client "goose" "$venv_python" "$server_py"
+            fi
+            ;;
+        *)
+            die "Unknown client type: $client_type. Valid: desktop, code, kilo, opencode, goose, both, all"
+            ;;
+    esac
+}
+
+# ── Banner ───────────────────────────────────────────────
 VERSION=$(get_version)
 INSTALLED_VERSION=$(get_installed_version)
 echo ""
@@ -330,21 +581,15 @@ fi
 echo "  ─────────────────────────────"
 echo ""
 
-# ── Uninstall path ──────────────────────────────────────
+# ── Uninstall path ───────────────────────────────────────
 if [[ "$UNINSTALL" == true ]]; then
     VENV_PYTHON=$(get_venv_python 2>/dev/null) || true
 
     if [[ -z "$VENV_PYTHON" || ! -f "$VENV_PYTHON" ]]; then
-        # Fall back to system python for JSON ops
         VENV_PYTHON=$(find_python) || die "Python not found"
     fi
 
-    if [[ "$CLIENT" == "both" ]]; then
-        configure_client "desktop" "$VENV_PYTHON" ""
-        configure_client "code" "$VENV_PYTHON" ""
-    else
-        configure_client "$CLIENT" "$VENV_PYTHON" ""
-    fi
+    configure_client "$CLIENT" "$VENV_PYTHON" ""
 
     rm -f "$MAGENT_DIR/$MARKER_FILE"
     info "Removed version marker"
@@ -370,13 +615,13 @@ if [[ "$UNINSTALL" == true ]]; then
     exit 0
 fi
 
-# ── Update path ─────────────────────────────────────────
+# ── Update path ──────────────────────────────────────────
 if [[ "$UPDATE" == true ]]; then
     if [[ -n "$INSTALLED_VERSION" ]]; then
         if [[ "$INSTALLED_VERSION" == "$VERSION" ]]; then
             if [[ "$CLIENT_EXPLICIT" != true && "$FORCE" != true ]]; then
                 info "Already at v${VERSION}. Nothing to do."
-                info "Use --update -c code|both to also reconfigure MCP client."
+                info "Use --upgrade -c code|all to also reconfigure MCP client."
                 echo ""
                 exit 0
             fi
@@ -389,7 +634,6 @@ if [[ "$UPDATE" == true ]]; then
     fi
     echo ""
 
-    # Need Python to update deps — use existing venv if available
     VENV_PYTHON=$(get_venv_python 2>/dev/null) || true
 
     if [[ -z "$VENV_PYTHON" || ! -f "$VENV_PYTHON" ]]; then
@@ -399,32 +643,22 @@ if [[ "$UPDATE" == true ]]; then
         VENV_PYTHON=$(get_venv_python)
     fi
 
-    # 1. Upgrade dependencies
     info "Upgrading dependencies..."
     "$VENV_PYTHON" -m pip install -r "$MAGENT_DIR/requirements.txt" --upgrade --quiet 2>&1 | tail -1 || true
     ok "Dependencies upgraded"
     echo ""
 
-    # 2. Merge new agents/workflows into existing config.yaml
     info "Migrating config.yaml..."
     migrate_config "$VENV_PYTHON"
     echo ""
 
-    # 2b. Reconfigure MCP client if -c was explicitly passed
     if [[ "$CLIENT_EXPLICIT" == true ]]; then
         info "Reconfiguring MCP client ($CLIENT)..."
         SERVER_PY="$MAGENT_DIR/server.py"
-        if [[ "$CLIENT" == "both" ]]; then
-            configure_client "desktop" "$VENV_PYTHON" "$SERVER_PY"
-            echo ""
-            configure_client "code" "$VENV_PYTHON" "$SERVER_PY"
-        else
-            configure_client "$CLIENT" "$VENV_PYTHON" "$SERVER_PY"
-        fi
+        configure_client "$CLIENT" "$VENV_PYTHON" "$SERVER_PY"
         echo ""
     fi
 
-    # 3. Run tests
     if [[ "$SKIP_TEST" != true ]]; then
         info "Validating installation..."
         if "$VENV_PYTHON" "$MAGENT_DIR/test_server.py" > /dev/null 2>&1; then
@@ -435,7 +669,6 @@ if [[ "$UPDATE" == true ]]; then
         echo ""
     fi
 
-    # 4. Update marker
     echo "$VERSION" > "$MAGENT_DIR/$MARKER_FILE"
     ok "Marker updated to v${VERSION}"
 
@@ -449,10 +682,9 @@ fi
 
 # ── Install path ─────────────────────────────────────────
 
-# Early exit if already at this version
 if [[ -n "$INSTALLED_VERSION" && "$INSTALLED_VERSION" == "$VERSION" && "$FORCE" != true ]]; then
     info "Already at v${VERSION}. Nothing to do."
-    info "Use --update to upgrade dependencies, or -f to force reinstall."
+    info "Use --upgrade to upgrade dependencies, or -f to force reinstall."
     echo ""
     exit 0
 fi
@@ -509,29 +741,33 @@ fi
 # 6. Configure MCP client
 info "Configuring MCP client..."
 SERVER_PY="$MAGENT_DIR/server.py"
-
-if [[ "$CLIENT" == "both" ]]; then
-    configure_client "desktop" "$VENV_PYTHON" "$SERVER_PY"
-    echo ""
-    configure_client "code" "$VENV_PYTHON" "$SERVER_PY"
-else
-    configure_client "$CLIENT" "$VENV_PYTHON" "$SERVER_PY"
-fi
+configure_client "$CLIENT" "$VENV_PYTHON" "$SERVER_PY"
 echo ""
 
 # 7. Write marker
 echo "$VERSION" > "$MAGENT_DIR/$MARKER_FILE"
 
-# ── Done ────────────────────────────────────────────────
+# ── Done ─────────────────────────────────────────────────
 echo "  ─────────────────────────────"
 echo "  mageNT installed successfully!"
 echo ""
 echo "  Next steps:"
-if [[ "$CLIENT" == "code" ]]; then
-    echo "  1. Open this directory in Claude Code"
-    echo "  2. Try: \"List the available agents\""
-else
-    echo "  1. Restart Claude Desktop (quit fully, then reopen)"
-    echo "  2. Try: \"List the available agents\""
-fi
+case "$CLIENT" in
+    code)
+        echo "  1. Open this directory in Claude Code"
+        echo "  2. Try: \"List the available agents\""
+        ;;
+    kilo)
+        echo "  1. Open this directory in Kilo Code"
+        echo "  2. Try: \"List the available agents\""
+        ;;
+    opencode|goose)
+        echo "  1. Restart the client to load the new MCP server"
+        echo "  2. Try: \"List the available agents\""
+        ;;
+    *)
+        echo "  1. Restart Claude Desktop (quit fully, then reopen)"
+        echo "  2. Try: \"List the available agents\""
+        ;;
+esac
 echo ""
