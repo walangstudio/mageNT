@@ -25,37 +25,91 @@ Run the installer:
 **Linux / macOS / Git Bash (Windows):**
 ```bash
 cd mageNT
-./install.sh                         # for Claude Desktop
-./install.sh -c code                 # for Claude Code (workspace-local)
-./install.sh -c code --global        # for Claude Code (global user config)
-./install.sh -c both                 # for both
+./install.sh                           # Claude Desktop
+./install.sh -c code                   # Claude Code (workspace-local)
+./install.sh -c code --global          # Claude Code (global user config)
+./install.sh -c kilo                   # Kilo Code
+./install.sh -c opencode               # OpenCode (workspace-local)
+./install.sh -c opencode --global      # OpenCode (global)
+./install.sh -c goose                  # Goose
+./install.sh -c all                    # all detected clients
 ```
 
 **Windows (Command Prompt / PowerShell):**
 ```bat
 cd mageNT
-install.bat                          REM for Claude Desktop
-install.bat -c code                  REM for Claude Code (workspace-local)
-install.bat -c code --global         REM for Claude Code (global user config)
-install.bat -c both                  REM for both
+install.bat                            REM Claude Desktop
+install.bat -c code                    REM Claude Code (workspace-local)
+install.bat -c code --global           REM Claude Code (global user config)
+install.bat -c kilo                    REM Kilo Code
+install.bat -c opencode                REM OpenCode (workspace-local)
+install.bat -c opencode --global       REM OpenCode (global)
+install.bat -c goose                   REM Goose
+install.bat -c all                     REM all detected clients
 ```
 
-That's it. The installer handles everything - creates a venv, installs deps, configures your MCP client, runs tests.
+That's it. The installer handles everything — creates a venv, installs deps, configures your MCP client, runs tests.
 
-Then just restart Claude and try:
+Then just restart your client and try:
 ```
 List the available agents
+```
+
+## Supported MCP Clients
+
+| Client | `-c TYPE` | Config written | Notes |
+|--------|-----------|----------------|-------|
+| Claude Desktop | `desktop` | OS-specific `claude_desktop_config.json` | Restart required |
+| Claude Code | `code` | `.mcp.json` (workspace) or `~/.claude.json` (global) | Use `--global` for user scope |
+| Kilo Code | `kilo` | `.kilocode/mcp.json` | Workspace-local only |
+| OpenCode | `opencode` | `opencode.json` / `~/.config/opencode/opencode.json` | Use `--global` for user scope |
+| Goose | `goose` | `~/.config/goose/config.yaml` | Global only |
+| pi.dev | manual | `~/.pi/agent/settings.json` + TS extension | No auto-config; see manual setup below |
+| All above | `all` | All existing configs | Skips clients not yet installed |
+
+### pi.dev manual setup
+
+pi.dev uses a TypeScript extension API rather than standard MCP JSON. Add a minimal bridge extension:
+
+```typescript
+// ~/.pi/extensions/magent-bridge.ts
+import { Extension } from "@pi-dev/sdk";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+export default class MagentBridge extends Extension {
+  name = "magent";
+
+  async activate() {
+    const transport = new StdioClientTransport({
+      command: "/path/to/mageNT/.venv/bin/python",
+      args: ["/path/to/mageNT/server.py"],
+    });
+    const client = new Client({ name: "magent-bridge", version: "1.0.0" }, {});
+    await client.connect(transport);
+    this.registerMcpClient(client);
+  }
+}
+```
+
+Register it in `~/.pi/agent/settings.json`:
+```json
+{
+  "extensions": ["~/.pi/extensions/magent-bridge.ts"]
+}
 ```
 
 ### Updating
 
 ```bash
-./install.sh --update              # upgrade deps + merge new agents into config
-./install.sh --update -c code      # upgrade + reconfigure Claude Code MCP path
+./install.sh --upgrade             # upgrade deps + merge new agents into config
+./install.sh --upgrade -c code     # upgrade + reconfigure Claude Code MCP path
 ```
 
+`--update` also works as an alias for `--upgrade`.
+
 Re-running the installer when already on the latest version exits cleanly with "Nothing to do."
-Use `-f` to force reinstall, or `--update -c code` to reconfigure MCP client paths.
+Use `-f` to force reinstall, or `--upgrade -c code` to reconfigure MCP client paths.
 
 ## Manual Setup
 
