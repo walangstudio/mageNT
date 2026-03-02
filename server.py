@@ -49,6 +49,7 @@ from agents.development.react_native_developer import ReactNativeDeveloper
 from agents.development.android_developer import AndroidDeveloper
 from agents.development.ios_developer import IOSDeveloper
 from agents.development.php_developer import PHPDeveloper
+from agents.development.tui_developer import TUIDeveloper
 
 # Data agents
 from agents.data.database_administrator import DatabaseAdministrator
@@ -93,6 +94,7 @@ AGENT_CLASSES = {
     "android_developer": AndroidDeveloper,
     "ios_developer": IOSDeveloper,
     "php_developer": PHPDeveloper,
+    "tui_developer": TUIDeveloper,
     # Data
     "database_administrator": DatabaseAdministrator,
     # Quality

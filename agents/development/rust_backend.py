@@ -47,6 +47,7 @@ class RustBackend(BaseAgent):
             "Use cargo test and cargo bench for testing and benchmarking",
             "Prefer async/await with Tokio for I/O-bound services",
             "Pin dependency versions in Cargo.lock for reproducible builds",
+            "For terminal UIs, hand off to the TUI Developer (consult_tui_developer) — use Ratatui + crossterm",
         ]
 
     @property

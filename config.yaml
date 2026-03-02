@@ -101,6 +101,11 @@ agents:
     enabled: true
     expertise_level: principal
     specialization: PHP 8.3, Laravel, Symfony, Composer, MySQL, Redis, REST APIs
+  tui_developer:
+    enabled: true
+    expertise_level: principal
+    specialization: Textual, Rich, Bubble Tea, Ratatui, Python/Go/Rust TUI, ANSI,
+      Terminal UX
   database_administrator:
     enabled: true
     expertise_level: principal
@@ -593,5 +598,4 @@ hooks:
   - session_end
 server:
   name: magent-mcp
-  version: 0.4.0
   description: Multi-agent software development team MCP server with rules and hooks
