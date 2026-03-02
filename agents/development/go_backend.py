@@ -58,6 +58,7 @@ class GoBackend(BaseAgent):
             "Use Tauri v2 with Go plugin for native desktop capabilities",
             "Minimize binary size for Tauri distributions",
             "Implement secure Tauri permissions and CSP policies",
+            "For terminal UIs, hand off to the TUI Developer (consult_tui_developer) — use Bubble Tea + lipgloss",
         ]
 
     @property

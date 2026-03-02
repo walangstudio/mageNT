@@ -9,6 +9,16 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+def _read_package_version() -> str:
+    init_path = Path(__file__).parent.parent / "__init__.py"
+    try:
+        for line in init_path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("__version__"):
+                return line.split("=")[1].strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return "unknown"
+
 
 class ConfigLoader:
     """Loads and validates configuration from YAML files."""
@@ -181,11 +191,11 @@ class ConfigLoader:
         Returns:
             Server configuration dictionary.
         """
-        return self.config.get('server', {
-            'name': 'magent-mcp',
-            'version': '0.1.0',
-            'description': 'Multi-agent software development team MCP server'
-        })
+        server = dict(self.config.get('server', {}))
+        server.setdefault('name', 'magent-mcp')
+        server.setdefault('description', 'Multi-agent software development team MCP server')
+        server['version'] = _read_package_version()
+        return server
 
     def reload(self) -> None:
         """Reload configuration from file."""

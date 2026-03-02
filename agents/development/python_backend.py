@@ -52,6 +52,7 @@ class PythonBackend(BaseAgent):
             "Use proper password hashing with passlib",
             "Follow PEP 8 and use tools like ruff or black",
             "Implement health checks and monitoring endpoints",
+            "For terminal UIs, hand off to the TUI Developer (consult_tui_developer) — use Textual or Rich",
         ]
 
     @property

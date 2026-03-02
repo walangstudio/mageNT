@@ -19,6 +19,7 @@ from .react_native_developer import ReactNativeDeveloper
 from .android_developer import AndroidDeveloper
 from .ios_developer import IOSDeveloper
 from .php_developer import PHPDeveloper
+from .tui_developer import TUIDeveloper
 
 __all__ = [
     "ReactDeveloper",
@@ -40,4 +41,5 @@ __all__ = [
     "AndroidDeveloper",
     "IOSDeveloper",
     "PHPDeveloper",
+    "TUIDeveloper",
 ]
