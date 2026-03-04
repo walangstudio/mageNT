@@ -10,7 +10,7 @@ rem ── Defaults ────────────────────
 set "FORCE=false"
 set "UNINSTALL=false"
 set "UPDATE=false"
-set "CLIENT=desktop"
+set "CLIENT=claudedesktop"
 set "SKIP_TEST=false"
 set "GLOBAL_CONFIG=false"
 set "CLIENT_EXPLICIT=false"
@@ -22,27 +22,27 @@ rem ═════════════════════════�
 echo Usage: install.bat [options]
 echo.
 echo Options:
-echo   -c, --client TYPE   MCP client: desktop, code, kilo, opencode, goose, all (default: desktop)
+echo   -c, --client TYPE   MCP client: claudedesktop, claude, kilo, opencode, goose, all (default: claudedesktop)
 echo   -f, --force         Skip prompts, overwrite existing config
 echo   -u, --uninstall     Remove mageNT from MCP client config
 echo       --upgrade       Upgrade deps and merge new agents into existing config.yaml
 echo       --update        Alias for --upgrade
-echo       --global        Write to global config path (applies to: code, opencode, all)
+echo       --global        Write to global config path (applies to: claude, opencode, all)
 echo                       Default (no --global): writes to parent workspace dir
 echo       --skip-test     Skip test_server.py validation
 echo   -h, --help          Show this help
 echo.
 echo Examples:
 echo   install.bat                      Install for Claude Desktop
-echo   install.bat -c code              Install for Claude Code (workspace-local)
-echo   install.bat -c code --global     Install for Claude Code (global config)
+echo   install.bat -c claude              Install for Claude Code (workspace-local)
+echo   install.bat -c claude --global     Install for Claude Code (global config)
 echo   install.bat -c kilo              Install for Kilo Code
 echo   install.bat -c opencode          Install for OpenCode (workspace-local)
 echo   install.bat -c opencode --global Install for OpenCode (global)
 echo   install.bat -c goose             Install for Goose
 echo   install.bat -c all               Install for all detected clients
 echo   install.bat --upgrade            Upgrade deps ^& config
-echo   install.bat --upgrade -c code    Upgrade + reconfigure Claude Code MCP path
+echo   install.bat --upgrade -c claude    Upgrade + reconfigure Claude Code MCP path
 echo   install.bat -u                   Uninstall
 echo   install.bat -u -c all            Uninstall from all client configs
 echo   install.bat -f --skip-test       Force install, skip tests
@@ -107,11 +107,11 @@ rem ═════════════════════════�
 
 rem ── Validate --global ─────────────────────────────────
 if "!GLOBAL_CONFIG!"=="true" (
-    if not "!CLIENT!"=="code" (
+    if not "!CLIENT!"=="claude" (
         if not "!CLIENT!"=="both" (
             if not "!CLIENT!"=="opencode" (
                 if not "!CLIENT!"=="all" (
-                    echo   ERROR: --global is only valid with -c code, opencode, both, or all >&2
+                    echo   ERROR: --global is only valid with -c claude, opencode, both, or all >&2
                     exit /b 1
                 )
             )
@@ -390,7 +390,7 @@ if not "!INSTALLED_VERSION!"=="" (
         if not "!CLIENT_EXPLICIT!"=="true" (
             if not "!FORCE!"=="true" (
                 echo   Already at v!VERSION!. Nothing to do.
-                echo   Use --upgrade -c code^|all to also reconfigure MCP client.
+                echo   Use --upgrade -c claude^|all to also reconfigure MCP client.
                 echo.
                 goto :cleanup
             )
@@ -556,7 +556,7 @@ echo   -----------------------------
 echo   mageNT installed successfully!
 echo.
 echo   Next steps:
-if "!CLIENT!"=="code" (
+if "!CLIENT!"=="claude" (
     echo   1. Open the workspace in Claude Code
     echo   2. Try: "List the available agents"
 ) else if "!CLIENT!"=="kilo" (
@@ -619,8 +619,8 @@ set "_ct=%~1"
 set "_vp=%~2"
 set "_sp=%~3"
 
-if "!_ct!"=="desktop"  goto :cc_desktop
-if "!_ct!"=="code"     goto :cc_code
+if "!_ct!"=="claudedesktop"  goto :cc_desktop
+if "!_ct!"=="claude"         goto :cc_code
 if "!_ct!"=="kilo"     goto :cc_kilo
 if "!_ct!"=="opencode" goto :cc_opencode
 if "!_ct!"=="goose"    goto :cc_goose
@@ -699,15 +699,15 @@ if "!UNINSTALL!"=="true" (
 goto :eof
 
 :cc_both
-call :configure_client "desktop" "!_vp!" "!_sp!"
+call :configure_client "claudedesktop" "!_vp!" "!_sp!"
 echo.
-call :configure_client "code" "!_vp!" "!_sp!"
+call :configure_client "claude" "!_vp!" "!_sp!"
 goto :eof
 
 :cc_all
-call :configure_client "desktop" "!_vp!" "!_sp!"
+call :configure_client "claudedesktop" "!_vp!" "!_sp!"
 echo.
-call :configure_client "code" "!_vp!" "!_sp!"
+call :configure_client "claude" "!_vp!" "!_sp!"
 if "!UNINSTALL!"=="true" (
     echo.
     call :configure_client "kilo" "!_vp!" "!_sp!"
