@@ -142,13 +142,7 @@ get_code_config_path() {
 }
 
 get_global_code_config_paths() {
-    local found=()
-    [[ -f "$HOME/.claude.json"     ]] && found+=("$HOME/.claude.json")
-    [[ -f "$HOME/.claude/mcp.json" ]] && found+=("$HOME/.claude/mcp.json")
-    if [[ ${#found[@]} -eq 0 ]]; then
-        found+=("$HOME/.claude.json")
-    fi
-    printf '%s\n' "${found[@]}"
+    echo "$HOME/.claude.json"
 }
 
 get_kilo_config_path() {

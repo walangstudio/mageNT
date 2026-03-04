@@ -146,7 +146,7 @@ rem ── Compute config paths ────────────────
 set "DESKTOP_CONFIG=!APPDATA!\Claude\claude_desktop_config.json"
 
 if "!GLOBAL_CONFIG!"=="true" (
-    set "CODE_CONFIG=!USERPROFILE!\.claude\mcp.json"
+    set "CODE_CONFIG=!USERPROFILE!\.claude.json"
 ) else (
     for %%I in ("!MAGENT_DIR!") do set "_PARENT=%%~dpI"
     if "!_PARENT:~-1!"=="\" set "_PARENT=!_PARENT:~0,-1!"
@@ -638,24 +638,9 @@ goto :eof
 :cc_code
 if "!GLOBAL_CONFIG!"=="true" (
     echo   Client: Claude Code ^(global^)
-    rem Try both known global locations
     set "_code_cfg=!USERPROFILE!\.claude.json"
-    if exist "!_code_cfg!" (
-        echo   Config: !_code_cfg!
-        call :_configure_one_path "!_code_cfg!" "!_vp!" "!_sp!"
-    )
-    set "_code_cfg2=!USERPROFILE!\.claude\mcp.json"
-    if exist "!_code_cfg2!" (
-        echo   Config: !_code_cfg2!
-        call :_configure_one_path "!_code_cfg2!" "!_vp!" "!_sp!"
-    )
-    if not exist "!USERPROFILE!\.claude.json" (
-        if not exist "!USERPROFILE!\.claude\mcp.json" (
-            set "_code_cfg=!USERPROFILE!\.claude.json"
-            echo   Config: !_code_cfg!
-            call :_configure_one_path "!_code_cfg!" "!_vp!" "!_sp!"
-        )
-    )
+    echo   Config: !_code_cfg!
+    call :_configure_one_path "!_code_cfg!" "!_vp!" "!_sp!"
 ) else (
     echo   Client: Claude Code ^(workspace^)
     echo   Config: !CODE_CONFIG!
