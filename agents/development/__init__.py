@@ -20,6 +20,7 @@ from .android_developer import AndroidDeveloper
 from .ios_developer import IOSDeveloper
 from .php_developer import PHPDeveloper
 from .tui_developer import TUIDeveloper
+from .cli_installer_developer import CLIInstallerDeveloper
 
 __all__ = [
     "ReactDeveloper",
@@ -42,4 +43,5 @@ __all__ = [
     "IOSDeveloper",
     "PHPDeveloper",
     "TUIDeveloper",
+    "CLIInstallerDeveloper",
 ]
