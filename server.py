@@ -50,6 +50,7 @@ from agents.development.android_developer import AndroidDeveloper
 from agents.development.ios_developer import IOSDeveloper
 from agents.development.php_developer import PHPDeveloper
 from agents.development.tui_developer import TUIDeveloper
+from agents.development.cli_installer_developer import CLIInstallerDeveloper
 
 # Data agents
 from agents.data.database_administrator import DatabaseAdministrator
@@ -95,6 +96,7 @@ AGENT_CLASSES = {
     "ios_developer": IOSDeveloper,
     "php_developer": PHPDeveloper,
     "tui_developer": TUIDeveloper,
+    "cli_installer_developer": CLIInstallerDeveloper,
     # Data
     "database_administrator": DatabaseAdministrator,
     # Quality
