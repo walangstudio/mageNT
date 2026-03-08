@@ -25,27 +25,45 @@ Run the installer:
 **Linux / macOS / Git Bash (Windows):**
 ```bash
 cd mageNT
-./install.sh                           # Claude Desktop
-./install.sh -c code                   # Claude Code (workspace-local)
-./install.sh -c code --global          # Claude Code (global user config)
-./install.sh -c kilo                   # Kilo Code
-./install.sh -c opencode               # OpenCode (workspace-local)
-./install.sh -c opencode --global      # OpenCode (global)
-./install.sh -c goose                  # Goose
-./install.sh -c all                    # all detected clients
+./install.sh                              # Claude Desktop
+./install.sh -c claude                    # Claude Code (workspace-local)
+./install.sh -c claude --global           # Claude Code (global user config)
+./install.sh -c cursor                    # Cursor (workspace-local)
+./install.sh -c cursor --global           # Cursor (global)
+./install.sh -c windsurf                  # Windsurf (global only)
+./install.sh -c vscode                    # VS Code (.vscode/mcp.json)
+./install.sh -c gemini                    # Gemini CLI (workspace-local)
+./install.sh -c gemini --global           # Gemini CLI (global)
+./install.sh -c codex                     # OpenAI Codex CLI (workspace-local)
+./install.sh -c codex --global            # OpenAI Codex CLI (global)
+./install.sh -c zed                       # Zed (global)
+./install.sh -c kilo                      # Kilo Code
+./install.sh -c opencode                  # OpenCode (workspace-local)
+./install.sh -c opencode --global         # OpenCode (global)
+./install.sh -c goose                     # Goose
+./install.sh -c all                       # all detected clients
 ```
 
 **Windows (Command Prompt / PowerShell):**
 ```bat
 cd mageNT
-install.bat                            REM Claude Desktop
-install.bat -c code                    REM Claude Code (workspace-local)
-install.bat -c code --global           REM Claude Code (global user config)
-install.bat -c kilo                    REM Kilo Code
-install.bat -c opencode                REM OpenCode (workspace-local)
-install.bat -c opencode --global       REM OpenCode (global)
-install.bat -c goose                   REM Goose
-install.bat -c all                     REM all detected clients
+install.bat                               REM Claude Desktop
+install.bat -c claude                     REM Claude Code (workspace-local)
+install.bat -c claude --global            REM Claude Code (global user config)
+install.bat -c cursor                     REM Cursor (workspace-local)
+install.bat -c cursor --global            REM Cursor (global)
+install.bat -c windsurf                   REM Windsurf (global only)
+install.bat -c vscode                     REM VS Code (.vscode/mcp.json)
+install.bat -c gemini                     REM Gemini CLI (workspace-local)
+install.bat -c gemini --global            REM Gemini CLI (global)
+install.bat -c codex                      REM OpenAI Codex CLI (workspace-local)
+install.bat -c codex --global             REM OpenAI Codex CLI (global)
+install.bat -c zed                        REM Zed (global)
+install.bat -c kilo                       REM Kilo Code
+install.bat -c opencode                   REM OpenCode (workspace-local)
+install.bat -c opencode --global          REM OpenCode (global)
+install.bat -c goose                      REM Goose
+install.bat -c all                        REM all detected clients
 ```
 
 That's it. The installer handles everything — creates a venv, installs deps, configures your MCP client, runs tests.
@@ -59,13 +77,19 @@ List the available agents
 
 | Client | `-c TYPE` | Config written | Notes |
 |--------|-----------|----------------|-------|
-| Claude Desktop | `desktop` | OS-specific `claude_desktop_config.json` | Restart required |
-| Claude Code | `code` | `.mcp.json` (workspace) or `~/.claude.json` (global) | Use `--global` for user scope |
+| Claude Desktop | `claudedesktop` | OS-specific `claude_desktop_config.json` | Restart required |
+| Claude Code | `claude` | `.mcp.json` (workspace) or `~/.claude.json` (global) | Use `--global` for user scope |
+| Cursor | `cursor` | `.cursor/mcp.json` or `~/.cursor/mcp.json` (global) | Use `--global` for global |
+| Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` | Global only |
+| VS Code | `vscode` | `.vscode/mcp.json` | Workspace-local; global via VS Code settings UI |
+| Gemini CLI | `gemini` | `.gemini/settings.json` or `~/.gemini/settings.json` (global) | Use `--global` for global |
+| Codex CLI | `codex` | `.codex/config.toml` or `~/.codex/config.toml` (global) | TOML; use `--global` for global |
+| Zed | `zed` | `~/.config/zed/settings.json` | Global only |
 | Kilo Code | `kilo` | `.kilocode/mcp.json` | Workspace-local only |
-| OpenCode | `opencode` | `opencode.json` / `~/.config/opencode/opencode.json` | Use `--global` for user scope |
+| OpenCode | `opencode` | `opencode.json` / `~/.config/opencode/opencode.json` | Use `--global` for global |
 | Goose | `goose` | `~/.config/goose/config.yaml` | Global only |
-| pi.dev | manual | `~/.pi/agent/settings.json` + TS extension | No auto-config; see manual setup below |
-| All above | `all` | All existing configs | Skips clients not yet installed |
+| pi.dev | `pidev` | n/a | Prints manual instructions; no auto-config |
+| All above | `all` | All detected existing configs | Skips clients not yet installed |
 
 ### pi.dev manual setup
 
@@ -99,17 +123,42 @@ Register it in `~/.pi/agent/settings.json`:
 }
 ```
 
-### Updating
+### Installer Flags
 
-```bash
-./install.sh --upgrade             # upgrade deps + merge new agents into config
-./install.sh --upgrade -c code     # upgrade + reconfigure Claude Code MCP path
+```
+  -c, --client TYPE   claudedesktop, claude, cursor, windsurf, vscode, gemini, codex,
+                      zed, kilo, opencode, goose, pidev, all  (default: claudedesktop)
+  -f, --force         Skip prompts, overwrite existing config
+  -u, --uninstall     Remove from MCP client config
+      --upgrade       Upgrade deps and reconfigure (alias: --update)
+      --status        Show where this server is currently installed
+      --global        Write to global config (claude, cursor, gemini, codex, opencode)
+      --skip-test     Skip server validation
+  -h, --help          Show this help
 ```
 
-`--update` also works as an alias for `--upgrade`.
+### Checking install status
+
+```bash
+./install.sh --status
+```
+
+Scans all known config paths and prints a table showing which clients have mageNT registered.
+
+### Updating
+
+Pull the latest source first (or re-download and extract), then:
+
+```bash
+./install.sh --upgrade                    # upgrade deps + merge new agents into config
+./install.sh --upgrade -c all             # also reconfigure all clients
+./install.sh --upgrade -c claude          # upgrade + reconfigure Claude Code MCP path
+```
+
+`--update` is an alias for `--upgrade`.
 
 Re-running the installer when already on the latest version exits cleanly with "Nothing to do."
-Use `-f` to force reinstall, or `--upgrade -c code` to reconfigure MCP client paths.
+Use `-f` to force reinstall, or `--upgrade -c claude` to reconfigure MCP client paths.
 
 ## Manual Setup
 
@@ -121,37 +170,179 @@ pip install -r requirements.txt
 python server.py  # test it works, then Ctrl+C
 ```
 
-Now add mageNT to your config:
+Now add mageNT to your MCP client config (use absolute paths):
 
-**Claude Desktop** (`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
+### Claude Desktop
+
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Linux:** `~/.config/Claude/claude_desktop_config.json`
+
 ```json
 {
   "mcpServers": {
     "magent": {
-      "command": "python",
-      "args": ["/full/path/to/mageNT/server.py"]
+      "command": "/absolute/path/to/mageNT/.venv/bin/python",
+      "args": ["/absolute/path/to/mageNT/server.py"]
     }
   }
 }
 ```
 
-**Claude Code** — create `.mcp.json` in your workspace root (the directory you open in Claude Code):
+On Windows: `"command": "C:\\path\\to\\mageNT\\.venv\\Scripts\\python.exe"`
+
+### Claude Code
+
+Workspace-local (`.mcp.json` in your project root):
 ```json
 {
   "mcpServers": {
     "magent": {
-      "command": "python",
-      "args": ["/full/path/to/mageNT/server.py"]
+      "command": "/absolute/path/to/mageNT/.venv/bin/python",
+      "args": ["/absolute/path/to/mageNT/server.py"]
     }
   }
 }
 ```
 
-Or for global user config (`~/.claude/mcp.json` / `%USERPROFILE%\.claude\mcp.json`), same format.
+Global user scope:
+```bash
+claude mcp add --scope user magent -- /absolute/path/to/mageNT/.venv/bin/python /absolute/path/to/mageNT/server.py
+```
 
-Paths need to be absolute. Use `\\` on Windows, `/` on Mac/Linux.
+### Cursor
 
-Restart Claude completely (actually quit it, not just close the window).
+`.cursor/mcp.json` (workspace) or `~/.cursor/mcp.json` (global):
+```json
+{
+  "mcpServers": {
+    "magent": {
+      "command": "/absolute/path/to/mageNT/.venv/bin/python",
+      "args": ["/absolute/path/to/mageNT/server.py"]
+    }
+  }
+}
+```
+
+### Windsurf
+
+`~/.codeium/windsurf/mcp_config.json`:
+```json
+{
+  "mcpServers": {
+    "magent": {
+      "command": "/absolute/path/to/mageNT/.venv/bin/python",
+      "args": ["/absolute/path/to/mageNT/server.py"]
+    }
+  }
+}
+```
+
+### VS Code
+
+`.vscode/mcp.json` in your workspace root (note: VS Code uses `servers`, not `mcpServers`):
+```json
+{
+  "servers": {
+    "magent": {
+      "type": "stdio",
+      "command": "/absolute/path/to/mageNT/.venv/bin/python",
+      "args": ["/absolute/path/to/mageNT/server.py"]
+    }
+  }
+}
+```
+
+For user-level config, add via VS Code Settings UI under `mcp.servers`.
+
+### Gemini CLI
+
+`.gemini/settings.json` (workspace) or `~/.gemini/settings.json` (global):
+```json
+{
+  "mcpServers": {
+    "magent": {
+      "command": "/absolute/path/to/mageNT/.venv/bin/python",
+      "args": ["/absolute/path/to/mageNT/server.py"]
+    }
+  }
+}
+```
+
+### OpenAI Codex CLI
+
+`.codex/config.toml` (workspace) or `~/.codex/config.toml` (global):
+```toml
+[mcp_servers.magent]
+command = "/absolute/path/to/mageNT/.venv/bin/python /absolute/path/to/mageNT/server.py"
+startup_timeout_sec = 30
+tool_timeout_sec = 300
+enabled = true
+```
+
+### Zed
+
+`~/.config/zed/settings.json`:
+```json
+{
+  "context_servers": {
+    "magent": {
+      "command": {
+        "path": "/absolute/path/to/mageNT/.venv/bin/python",
+        "args": ["/absolute/path/to/mageNT/server.py"],
+        "env": {}
+      }
+    }
+  }
+}
+```
+
+### Kilo Code
+
+`.kilocode/mcp.json` in your workspace root:
+```json
+{
+  "mcpServers": {
+    "magent": {
+      "command": "/absolute/path/to/mageNT/.venv/bin/python",
+      "args": ["/absolute/path/to/mageNT/server.py"]
+    }
+  }
+}
+```
+
+### OpenCode
+
+`opencode.json` (workspace) or `~/.config/opencode/opencode.json` (global):
+```json
+{
+  "mcp": {
+    "magent": {
+      "command": "/absolute/path/to/mageNT/.venv/bin/python",
+      "args": ["/absolute/path/to/mageNT/server.py"]
+    }
+  }
+}
+```
+
+### Goose
+
+`~/.config/goose/config.yaml`:
+```yaml
+extensions:
+  magent:
+    type: stdio
+    cmd: /absolute/path/to/mageNT/.venv/bin/python
+    args:
+      - /absolute/path/to/mageNT/server.py
+    enabled: true
+```
+
+### pi.dev
+
+pi.dev does not support MCP servers natively. It uses TypeScript extensions instead. See the existing pi.dev bridge example in the **Supported MCP Clients** section above.
+
+On Windows, use `C:\absolute\path\to\mageNT\.venv\Scripts\python.exe` for the command. Restart the client after editing any config.
 
 ## How to Use
 

@@ -5,6 +5,7 @@ rem ── Config ────────────────────�
 set "MARKER_FILE=.magent-installed"
 set "MAGENT_DIR=%~dp0"
 if "!MAGENT_DIR:~-1!"=="\" set "MAGENT_DIR=!MAGENT_DIR:~0,-1!"
+set "SERVER_NAME=magent"
 
 rem ── Defaults ────────────────────────────────────────────
 set "FORCE=false"
@@ -14,6 +15,7 @@ set "CLIENT=claudedesktop"
 set "SKIP_TEST=false"
 set "GLOBAL_CONFIG=false"
 set "CLIENT_EXPLICIT=false"
+set "STATUS=false"
 
 goto :parse_args
 
@@ -22,30 +24,41 @@ rem ═════════════════════════�
 echo Usage: install.bat [options]
 echo.
 echo Options:
-echo   -c, --client TYPE   MCP client: claudedesktop, claude, kilo, opencode, goose, all (default: claudedesktop)
+echo   -c, --client TYPE   MCP client: claudedesktop, claude, cursor, windsurf,
+echo                       vscode, gemini, codex, zed, kilo, opencode, goose,
+echo                       pidev, all  (default: claudedesktop)
 echo   -f, --force         Skip prompts, overwrite existing config
 echo   -u, --uninstall     Remove mageNT from MCP client config
 echo       --upgrade       Upgrade deps and merge new agents into existing config.yaml
 echo       --update        Alias for --upgrade
-echo       --global        Write to global config path (applies to: claude, opencode, all)
-echo                       Default (no --global): writes to parent workspace dir
+echo       --status        Show where this server is currently installed
+echo       --global        Write to global config path (claude, cursor, gemini,
+echo                       codex, opencode, all)
 echo       --skip-test     Skip test_server.py validation
 echo   -h, --help          Show this help
 echo.
 echo Examples:
-echo   install.bat                      Install for Claude Desktop
-echo   install.bat -c claude              Install for Claude Code (workspace-local)
-echo   install.bat -c claude --global     Install for Claude Code (global config)
-echo   install.bat -c kilo              Install for Kilo Code
-echo   install.bat -c opencode          Install for OpenCode (workspace-local)
-echo   install.bat -c opencode --global Install for OpenCode (global)
-echo   install.bat -c goose             Install for Goose
-echo   install.bat -c all               Install for all detected clients
-echo   install.bat --upgrade            Upgrade deps ^& config
+echo   install.bat                        Install for Claude Desktop
+echo   install.bat -c claude              Install for Claude Code (workspace)
+echo   install.bat -c claude --global     Install for Claude Code (global)
+echo   install.bat -c cursor              Install for Cursor (workspace)
+echo   install.bat -c cursor --global     Install for Cursor (global)
+echo   install.bat -c windsurf            Install for Windsurf
+echo   install.bat -c vscode              Install for VS Code (workspace)
+echo   install.bat -c gemini              Install for Gemini CLI
+echo   install.bat -c codex               Install for OpenAI Codex CLI
+echo   install.bat -c zed                 Install for Zed (global)
+echo   install.bat -c kilo                Install for Kilo Code
+echo   install.bat -c opencode            Install for OpenCode (workspace)
+echo   install.bat -c opencode --global   Install for OpenCode (global)
+echo   install.bat -c goose               Install for Goose
+echo   install.bat -c all                 Install for all detected clients
+echo   install.bat --status               Show installation status
+echo   install.bat --upgrade              Upgrade deps ^& config
+echo   install.bat --upgrade -c all        Upgrade + reconfigure all clients
 echo   install.bat --upgrade -c claude    Upgrade + reconfigure Claude Code MCP path
-echo   install.bat -u                   Uninstall
-echo   install.bat -u -c all            Uninstall from all client configs
-echo   install.bat -f --skip-test       Force install, skip tests
+echo   install.bat -u                     Uninstall
+echo   install.bat -u -c all              Uninstall from all client configs
 exit /b 0
 
 rem ════════════════════════════════════════════════════════
@@ -59,6 +72,7 @@ if /i "%~1"=="-u"          goto :pf_uninstall
 if /i "%~1"=="--uninstall" goto :pf_uninstall
 if /i "%~1"=="--update"    goto :pf_update
 if /i "%~1"=="--upgrade"   goto :pf_update
+if /i "%~1"=="--status"    goto :pf_status
 if /i "%~1"=="--global"    goto :pf_global
 if /i "%~1"=="--skip-test" goto :pf_skip_test
 if /i "%~1"=="-c"          goto :pf_client
@@ -70,27 +84,26 @@ goto :show_help
 set "FORCE=true"
 shift
 goto :parse_args
-
 :pf_uninstall
 set "UNINSTALL=true"
 shift
 goto :parse_args
-
 :pf_update
 set "UPDATE=true"
 shift
 goto :parse_args
-
+:pf_status
+set "STATUS=true"
+shift
+goto :parse_args
 :pf_global
 set "GLOBAL_CONFIG=true"
 shift
 goto :parse_args
-
 :pf_skip_test
 set "SKIP_TEST=true"
 shift
 goto :parse_args
-
 :pf_client
 if "%~2"=="" (
     echo   ERROR: --client requires a value >&2
@@ -105,14 +118,25 @@ goto :parse_args
 rem ════════════════════════════════════════════════════════
 :args_done
 
+rem ── Default uninstall to all clients ─────────────────
+if "!UNINSTALL!"=="true" (
+    if "!CLIENT_EXPLICIT!"=="false" set "CLIENT=all"
+)
+
 rem ── Validate --global ─────────────────────────────────
 if "!GLOBAL_CONFIG!"=="true" (
     if not "!CLIENT!"=="claude" (
-        if not "!CLIENT!"=="both" (
-            if not "!CLIENT!"=="opencode" (
-                if not "!CLIENT!"=="all" (
-                    echo   ERROR: --global is only valid with -c claude, opencode, both, or all >&2
-                    exit /b 1
+        if not "!CLIENT!"=="cursor" (
+            if not "!CLIENT!"=="gemini" (
+                if not "!CLIENT!"=="codex" (
+                    if not "!CLIENT!"=="both" (
+                        if not "!CLIENT!"=="opencode" (
+                            if not "!CLIENT!"=="all" (
+                                echo   ERROR: --global is only valid with -c claude, cursor, gemini, codex, opencode, both, or all >&2
+                                exit /b 1
+                            )
+                        )
+                    )
                 )
             )
         )
@@ -144,17 +168,36 @@ if exist "!MAGENT_DIR!\!MARKER_FILE!" (
 
 rem ── Compute config paths ─────────────────────────────────
 set "DESKTOP_CONFIG=!APPDATA!\Claude\claude_desktop_config.json"
+set "_PARENT=%CD%"
 
 if "!GLOBAL_CONFIG!"=="true" (
     set "CODE_CONFIG=!USERPROFILE!\.claude.json"
 ) else (
-    for %%I in ("!MAGENT_DIR!") do set "_PARENT=%%~dpI"
-    if "!_PARENT:~-1!"=="\" set "_PARENT=!_PARENT:~0,-1!"
     set "CODE_CONFIG=!_PARENT!\.mcp.json"
 )
 
-for %%I in ("!MAGENT_DIR!") do set "_PARENT=%%~dpI"
-if "!_PARENT:~-1!"=="\" set "_PARENT=!_PARENT:~0,-1!"
+if "!GLOBAL_CONFIG!"=="true" (
+    set "CURSOR_CONFIG=!USERPROFILE!\.cursor\mcp.json"
+) else (
+    set "CURSOR_CONFIG=!_PARENT!\.cursor\mcp.json"
+)
+
+set "WINDSURF_CONFIG=!USERPROFILE!\.codeium\windsurf\mcp_config.json"
+set "VSCODE_CONFIG=!_PARENT!\.vscode\mcp.json"
+
+if "!GLOBAL_CONFIG!"=="true" (
+    set "GEMINI_CONFIG=!USERPROFILE!\.gemini\settings.json"
+) else (
+    set "GEMINI_CONFIG=!_PARENT!\.gemini\settings.json"
+)
+
+if "!GLOBAL_CONFIG!"=="true" (
+    set "CODEX_CONFIG=!USERPROFILE!\.codex\config.toml"
+) else (
+    set "CODEX_CONFIG=!_PARENT!\.codex\config.toml"
+)
+
+set "ZED_CONFIG=!USERPROFILE!\.config\zed\settings.json"
 set "KILO_CONFIG=!_PARENT!\.kilocode\mcp.json"
 
 if "!GLOBAL_CONFIG!"=="true" (
@@ -174,17 +217,22 @@ set "PY_MERGE_OPENCODE=!TEMP!\magent_merge_opencode.py"
 set "PY_REMOVE_OPENCODE=!TEMP!\magent_remove_opencode.py"
 set "PY_MERGE_GOOSE=!TEMP!\magent_merge_goose.py"
 set "PY_REMOVE_GOOSE=!TEMP!\magent_remove_goose.py"
+set "PY_MERGE_VSCODE=!TEMP!\magent_merge_vscode.py"
+set "PY_REMOVE_VSCODE=!TEMP!\magent_remove_vscode.py"
+set "PY_MERGE_CODEX=!TEMP!\magent_merge_codex.py"
+set "PY_REMOVE_CODEX=!TEMP!\magent_remove_codex.py"
+set "PY_MERGE_ZED=!TEMP!\magent_merge_zed.py"
+set "PY_REMOVE_ZED=!TEMP!\magent_remove_zed.py"
+set "PY_STATUS=!TEMP!\magent_status.py"
 
-rem -- PY_MERGE --
+rem -- PY_MERGE (mcpServers) --
 echo import json, sys, os > "!PY_MERGE!"
 echo config_path = os.path.abspath(sys.argv[1]) >> "!PY_MERGE!"
 echo python_path = sys.executable >> "!PY_MERGE!"
 echo server_py = os.path.abspath(sys.argv[2]) >> "!PY_MERGE!"
 echo try: >> "!PY_MERGE!"
-echo     with open(config_path) as f: >> "!PY_MERGE!"
-echo         config = json.load(f) >> "!PY_MERGE!"
-echo except (FileNotFoundError, json.JSONDecodeError): >> "!PY_MERGE!"
-echo     config = {} >> "!PY_MERGE!"
+echo     with open(config_path) as f: config = json.load(f) >> "!PY_MERGE!"
+echo except (FileNotFoundError, json.JSONDecodeError): config = {} >> "!PY_MERGE!"
 echo config.setdefault('mcpServers', {}) >> "!PY_MERGE!"
 echo config['mcpServers']['magent'] = {'command': python_path, 'args': [server_py]} >> "!PY_MERGE!"
 echo d = os.path.dirname(os.path.abspath(config_path)) >> "!PY_MERGE!"
@@ -196,27 +244,23 @@ echo     f.write('\n') >> "!PY_MERGE!"
 rem -- PY_REMOVE --
 echo import json, sys, os > "!PY_REMOVE!"
 echo config_path = sys.argv[1] >> "!PY_REMOVE!"
+echo lbl = sys.argv[2] if len(sys.argv) > 2 else 'config' >> "!PY_REMOVE!"
 echo if not os.path.exists(config_path): sys.exit(0) >> "!PY_REMOVE!"
 echo try: >> "!PY_REMOVE!"
-echo     with open(config_path) as f: >> "!PY_REMOVE!"
-echo         config = json.load(f) >> "!PY_REMOVE!"
+echo     with open(config_path) as f: config = json.load(f) >> "!PY_REMOVE!"
 echo except (FileNotFoundError, json.JSONDecodeError): sys.exit(0) >> "!PY_REMOVE!"
 echo servers = config.get('mcpServers', {}) >> "!PY_REMOVE!"
 echo if 'magent' in servers: >> "!PY_REMOVE!"
 echo     del servers['magent'] >> "!PY_REMOVE!"
-echo     with open(config_path, 'w') as f: >> "!PY_REMOVE!"
-echo         json.dump(config, f, indent=2) >> "!PY_REMOVE!"
-echo         f.write('\n') >> "!PY_REMOVE!"
-echo     print('  Removed magent from config') >> "!PY_REMOVE!"
-echo else: print('  magent not found in config') >> "!PY_REMOVE!"
+echo     with open(config_path, 'w') as f: json.dump(config, f, indent=2); f.write('\n') >> "!PY_REMOVE!"
+echo     print('  OK: Removed from ' + lbl) >> "!PY_REMOVE!"
 
 rem -- PY_CHECK --
 echo import json, sys, os > "!PY_CHECK!"
 echo config_path = sys.argv[1] >> "!PY_CHECK!"
 echo venv_python = sys.argv[2] >> "!PY_CHECK!"
 echo try: >> "!PY_CHECK!"
-echo     with open(config_path) as f: >> "!PY_CHECK!"
-echo         c = json.load(f) >> "!PY_CHECK!"
+echo     with open(config_path) as f: c = json.load(f) >> "!PY_CHECK!"
 echo     entry = c.get('mcpServers', {}).get('magent', {}) >> "!PY_CHECK!"
 echo     cmd = entry.get('command', '') >> "!PY_CHECK!"
 echo     if cmd == venv_python: print('uptodate') >> "!PY_CHECK!"
@@ -278,7 +322,6 @@ echo if 'magent' in mcp: >> "!PY_REMOVE_OPENCODE!"
 echo     del mcp['magent'] >> "!PY_REMOVE_OPENCODE!"
 echo     with open(config_path, 'w') as f: json.dump(config, f, indent=2); f.write('\n') >> "!PY_REMOVE_OPENCODE!"
 echo     print('  Removed magent from config') >> "!PY_REMOVE_OPENCODE!"
-echo else: print('  magent not found in config') >> "!PY_REMOVE_OPENCODE!"
 
 rem -- PY_MERGE_GOOSE --
 echo import sys, os > "!PY_MERGE_GOOSE!"
@@ -320,27 +363,151 @@ echo if 'magent' in ext: >> "!PY_REMOVE_GOOSE!"
 echo     del ext['magent'] >> "!PY_REMOVE_GOOSE!"
 echo     with open(config_path, 'w') as f: yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False) >> "!PY_REMOVE_GOOSE!"
 echo     print('  Removed magent from config') >> "!PY_REMOVE_GOOSE!"
-echo else: print('  magent not found in config') >> "!PY_REMOVE_GOOSE!"
+
+rem -- PY_MERGE_VSCODE (servers key) --
+echo import json, sys, os > "!PY_MERGE_VSCODE!"
+echo config_path = os.path.abspath(sys.argv[1]) >> "!PY_MERGE_VSCODE!"
+echo python_path = sys.executable >> "!PY_MERGE_VSCODE!"
+echo server_py = os.path.abspath(sys.argv[2]) >> "!PY_MERGE_VSCODE!"
+echo try: >> "!PY_MERGE_VSCODE!"
+echo     with open(config_path) as f: config = json.load(f) >> "!PY_MERGE_VSCODE!"
+echo except (FileNotFoundError, json.JSONDecodeError): config = {} >> "!PY_MERGE_VSCODE!"
+echo config.setdefault('servers', {}) >> "!PY_MERGE_VSCODE!"
+echo config['servers']['magent'] = {'type': 'stdio', 'command': python_path, 'args': [server_py]} >> "!PY_MERGE_VSCODE!"
+echo d = os.path.dirname(os.path.abspath(config_path)) >> "!PY_MERGE_VSCODE!"
+echo if d: os.makedirs(d, exist_ok=True) >> "!PY_MERGE_VSCODE!"
+echo with open(config_path, 'w') as f: json.dump(config, f, indent=2); f.write('\n') >> "!PY_MERGE_VSCODE!"
+
+rem -- PY_REMOVE_VSCODE --
+echo import json, sys, os > "!PY_REMOVE_VSCODE!"
+echo config_path = sys.argv[1] >> "!PY_REMOVE_VSCODE!"
+echo if not os.path.exists(config_path): sys.exit(0) >> "!PY_REMOVE_VSCODE!"
+echo try: >> "!PY_REMOVE_VSCODE!"
+echo     with open(config_path) as f: config = json.load(f) >> "!PY_REMOVE_VSCODE!"
+echo except: sys.exit(0) >> "!PY_REMOVE_VSCODE!"
+echo servers = config.get('servers', {}) >> "!PY_REMOVE_VSCODE!"
+echo if 'magent' in servers: >> "!PY_REMOVE_VSCODE!"
+echo     del servers['magent'] >> "!PY_REMOVE_VSCODE!"
+echo     with open(config_path, 'w') as f: json.dump(config, f, indent=2); f.write('\n') >> "!PY_REMOVE_VSCODE!"
+echo     print('  Removed magent from VS Code config') >> "!PY_REMOVE_VSCODE!"
+
+rem -- PY_MERGE_CODEX (TOML) --
+echo import sys, os, re > "!PY_MERGE_CODEX!"
+echo config_path = os.path.abspath(sys.argv[1]) >> "!PY_MERGE_CODEX!"
+echo python_path = sys.executable >> "!PY_MERGE_CODEX!"
+echo server_py = os.path.abspath(sys.argv[2]) >> "!PY_MERGE_CODEX!"
+echo sn = 'magent' >> "!PY_MERGE_CODEX!"
+echo section_header = '[mcp_servers.' + sn + ']' >> "!PY_MERGE_CODEX!"
+echo cmd = python_path + ' ' + server_py >> "!PY_MERGE_CODEX!"
+echo new_section = '\n' + section_header + '\ncommand = "' + cmd + '"\nstartup_timeout_sec = 30\ntool_timeout_sec = 300\nenabled = true\n' >> "!PY_MERGE_CODEX!"
+echo os.makedirs(os.path.dirname(config_path) or '.', exist_ok=True) >> "!PY_MERGE_CODEX!"
+echo existing = '' >> "!PY_MERGE_CODEX!"
+echo try: >> "!PY_MERGE_CODEX!"
+echo     with open(config_path) as f: existing = f.read() >> "!PY_MERGE_CODEX!"
+echo except FileNotFoundError: pass >> "!PY_MERGE_CODEX!"
+echo if section_header in existing: >> "!PY_MERGE_CODEX!"
+echo     lines = existing.split('\n') >> "!PY_MERGE_CODEX!"
+echo     start = next((i for i, l in enumerate(lines) if l.strip() == section_header), -1) >> "!PY_MERGE_CODEX!"
+echo     if start != -1: >> "!PY_MERGE_CODEX!"
+echo         end = len(lines) >> "!PY_MERGE_CODEX!"
+echo         for i in range(start + 1, len(lines)): >> "!PY_MERGE_CODEX!"
+echo             if re.match(r'^\[', lines[i]): end = i; break >> "!PY_MERGE_CODEX!"
+echo         del lines[start:end] >> "!PY_MERGE_CODEX!"
+echo         existing = '\n'.join(lines) >> "!PY_MERGE_CODEX!"
+echo existing = existing.rstrip() >> "!PY_MERGE_CODEX!"
+echo if existing: existing += '\n' >> "!PY_MERGE_CODEX!"
+echo with open(config_path, 'w') as f: f.write(existing + new_section) >> "!PY_MERGE_CODEX!"
+
+rem -- PY_REMOVE_CODEX --
+echo import sys, os, re > "!PY_REMOVE_CODEX!"
+echo config_path = sys.argv[1] >> "!PY_REMOVE_CODEX!"
+echo sn = 'magent' >> "!PY_REMOVE_CODEX!"
+echo section_header = '[mcp_servers.' + sn + ']' >> "!PY_REMOVE_CODEX!"
+echo if not os.path.exists(config_path): sys.exit(0) >> "!PY_REMOVE_CODEX!"
+echo with open(config_path) as f: existing = f.read() >> "!PY_REMOVE_CODEX!"
+echo if section_header not in existing: >> "!PY_REMOVE_CODEX!"
+echo     sys.exit(0) >> "!PY_REMOVE_CODEX!"
+echo lines = existing.split('\n') >> "!PY_REMOVE_CODEX!"
+echo start = next((i for i, l in enumerate(lines) if l.strip() == section_header), -1) >> "!PY_REMOVE_CODEX!"
+echo if start != -1: >> "!PY_REMOVE_CODEX!"
+echo     end = len(lines) >> "!PY_REMOVE_CODEX!"
+echo     for i in range(start + 1, len(lines)): >> "!PY_REMOVE_CODEX!"
+echo         if re.match(r'^\[', lines[i]): end = i; break >> "!PY_REMOVE_CODEX!"
+echo     del lines[start:end] >> "!PY_REMOVE_CODEX!"
+echo     with open(config_path, 'w') as f: f.write('\n'.join(lines)) >> "!PY_REMOVE_CODEX!"
+echo     print('  Removed magent from codex config') >> "!PY_REMOVE_CODEX!"
+
+rem -- PY_MERGE_ZED (context_servers) --
+echo import json, sys, os > "!PY_MERGE_ZED!"
+echo config_path = os.path.abspath(sys.argv[1]) >> "!PY_MERGE_ZED!"
+echo python_path = sys.executable >> "!PY_MERGE_ZED!"
+echo server_py = os.path.abspath(sys.argv[2]) >> "!PY_MERGE_ZED!"
+echo try: >> "!PY_MERGE_ZED!"
+echo     with open(config_path) as f: config = json.load(f) >> "!PY_MERGE_ZED!"
+echo except (FileNotFoundError, json.JSONDecodeError): config = {} >> "!PY_MERGE_ZED!"
+echo config.setdefault('context_servers', {}) >> "!PY_MERGE_ZED!"
+echo config['context_servers']['magent'] = {'command': {'path': python_path, 'args': [server_py], 'env': {}}} >> "!PY_MERGE_ZED!"
+echo os.makedirs(os.path.dirname(config_path), exist_ok=True) >> "!PY_MERGE_ZED!"
+echo with open(config_path, 'w') as f: json.dump(config, f, indent=2); f.write('\n') >> "!PY_MERGE_ZED!"
+
+rem -- PY_REMOVE_ZED --
+echo import json, sys, os > "!PY_REMOVE_ZED!"
+echo config_path = sys.argv[1] >> "!PY_REMOVE_ZED!"
+echo if not os.path.exists(config_path): sys.exit(0) >> "!PY_REMOVE_ZED!"
+echo try: >> "!PY_REMOVE_ZED!"
+echo     with open(config_path) as f: config = json.load(f) >> "!PY_REMOVE_ZED!"
+echo except: sys.exit(0) >> "!PY_REMOVE_ZED!"
+echo cs = config.get('context_servers', {}) >> "!PY_REMOVE_ZED!"
+echo if 'magent' in cs: >> "!PY_REMOVE_ZED!"
+echo     del cs['magent'] >> "!PY_REMOVE_ZED!"
+echo     with open(config_path, 'w') as f: json.dump(config, f, indent=2); f.write('\n') >> "!PY_REMOVE_ZED!"
+echo     print('  Removed magent from Zed config') >> "!PY_REMOVE_ZED!"
+
+rem -- PY_STATUS --
+echo import sys, os > "!PY_STATUS!"
+echo config_path = sys.argv[1] >> "!PY_STATUS!"
+echo fmt = sys.argv[2] if len(sys.argv) > 2 else 'json' >> "!PY_STATUS!"
+echo if not os.path.exists(config_path): print('NO'); sys.exit(0) >> "!PY_STATUS!"
+echo try: >> "!PY_STATUS!"
+echo     if fmt == 'toml': >> "!PY_STATUS!"
+echo         c = open(config_path).read() >> "!PY_STATUS!"
+echo         print('YES' if '[mcp_servers.magent]' in c else 'NO') >> "!PY_STATUS!"
+echo     elif fmt == 'yaml': >> "!PY_STATUS!"
+echo         c = open(config_path).read() >> "!PY_STATUS!"
+echo         print('YES' if '  magent:' in c else 'NO') >> "!PY_STATUS!"
+echo     else: >> "!PY_STATUS!"
+echo         import json >> "!PY_STATUS!"
+echo         c = json.dumps(json.load(open(config_path))) >> "!PY_STATUS!"
+echo         print('YES' if '"magent"' in c else 'NO') >> "!PY_STATUS!"
+echo except: print('NO') >> "!PY_STATUS!"
 
 rem ── Banner ───────────────────────────────────────────────
 echo.
 echo   mageNT v!VERSION!
-if "!UPDATE!"=="true" (
+if "!STATUS!"=="true" (
+    echo   Mode: status
+) else if "!UPDATE!"=="true" (
     if not "!INSTALLED_VERSION!"=="" (
         if not "!INSTALLED_VERSION!"=="!VERSION!" (
             echo   Upgrading from v!INSTALLED_VERSION!
         )
     )
-)
-if "!UNINSTALL!"=="true" (
-    echo   Mode: uninstall
-) else if "!UPDATE!"=="true" (
     echo   Mode: update
+) else if "!UNINSTALL!"=="true" (
+    echo   Mode: uninstall
 ) else (
     echo   Mode: install ^(client: !CLIENT!^)
 )
 echo   -----------------------------
 echo.
+
+rem ── Status ───────────────────────────────────────────────
+if "!STATUS!"=="true" (
+    call :find_venv_python
+    if "!VENV_PYTHON!"=="" call :find_python & set "VENV_PYTHON=!SYSTEM_PYTHON!"
+    call :show_status
+    goto :cleanup
+)
 
 rem ── Uninstall path ───────────────────────────────────────
 if not "!UNINSTALL!"=="true" goto :not_uninstall
@@ -404,6 +571,7 @@ if not "!INSTALLED_VERSION!"=="" (
 )
 echo.
 
+
 call :find_venv_python
 if "!VENV_PYTHON!"=="" (
     call :find_python
@@ -435,7 +603,7 @@ if exist "!MAGENT_DIR!\config.example.yaml" (
 )
 echo.
 
-rem 2b. Reconfigure MCP client if -c was explicit
+rem 3. Reconfigure MCP client if -c was explicit
 if "!CLIENT_EXPLICIT!"=="true" (
     echo   Reconfiguring MCP client ^(!CLIENT!^)...
     set "SERVER_PY=!MAGENT_DIR!\server.py"
@@ -443,7 +611,7 @@ if "!CLIENT_EXPLICIT!"=="true" (
     echo.
 )
 
-rem 3. Run tests
+rem 4. Run tests
 if not "!SKIP_TEST!"=="true" (
     echo   Validating installation...
     "!VENV_PYTHON!" "!MAGENT_DIR!\test_server.py" >nul 2>&1
@@ -455,7 +623,7 @@ if not "!SKIP_TEST!"=="true" (
     echo.
 )
 
-rem 4. Update marker
+rem 5. Update marker
 echo !VERSION!> "!MAGENT_DIR!\!MARKER_FILE!"
 echo   OK: Marker updated to v!VERSION!
 
@@ -470,7 +638,6 @@ goto :cleanup
 
 rem ── Install path ─────────────────────────────────────────
 
-rem Early exit if already at this version
 if not "!INSTALLED_VERSION!"=="" (
     if "!INSTALLED_VERSION!"=="!VERSION!" (
         if not "!FORCE!"=="true" (
@@ -559,31 +726,24 @@ echo   Next steps:
 if "!CLIENT!"=="claude" (
     echo   1. Open the workspace in Claude Code
     echo   2. Try: "List the available agents"
-) else if "!CLIENT!"=="kilo" (
-    echo   1. Open the workspace in Kilo Code
-    echo   2. Try: "List the available agents"
-) else if "!CLIENT!"=="opencode" (
-    echo   1. Restart OpenCode to load the new MCP server
-    echo   2. Try: "List the available agents"
-) else if "!CLIENT!"=="goose" (
-    echo   1. Restart Goose to load the new MCP server
+) else if "!CLIENT!"=="claudedesktop" (
+    echo   1. Restart Claude Desktop ^(quit fully, then reopen^)
     echo   2. Try: "List the available agents"
 ) else (
-    echo   1. Restart Claude Desktop (quit fully, then reopen)
+    echo   1. Restart your MCP client to load the server
     echo   2. Try: "List the available agents"
 )
 echo.
 
 :cleanup
-rem Clean up temp files
 del /f /q "!PY_MERGE!" "!PY_REMOVE!" "!PY_CHECK!" "!PY_MIGRATE!" 2>nul
 del /f /q "!PY_MERGE_OPENCODE!" "!PY_REMOVE_OPENCODE!" "!PY_MERGE_GOOSE!" "!PY_REMOVE_GOOSE!" 2>nul
+del /f /q "!PY_MERGE_VSCODE!" "!PY_REMOVE_VSCODE!" "!PY_MERGE_CODEX!" "!PY_REMOVE_CODEX!" 2>nul
+del /f /q "!PY_MERGE_ZED!" "!PY_REMOVE_ZED!" "!PY_STATUS!" 2>nul
 endlocal
 exit /b 0
 
 rem ════════════════════════════════════════════════════════
-rem Subroutine: find_python
-rem Sets SYSTEM_PYTHON to first Python 3.10+ found
 :find_python
 set "SYSTEM_PYTHON="
 for %%P in (python python3 py) do (
@@ -600,8 +760,6 @@ for %%P in (python python3 py) do (
 goto :eof
 
 rem ════════════════════════════════════════════════════════
-rem Subroutine: find_venv_python
-rem Sets VENV_PYTHON if venv exists
 :find_venv_python
 set "VENV_PYTHON="
 if exist "!MAGENT_DIR!\.venv\Scripts\python.exe" (
@@ -612,8 +770,53 @@ if exist "!MAGENT_DIR!\.venv\Scripts\python.exe" (
 goto :eof
 
 rem ════════════════════════════════════════════════════════
-rem Subroutine: configure_client <client_type> <venv_python> <server_py>
-rem Dispatches to the appropriate config handler
+:show_status
+echo import json, os > "!PY_STATUS!"
+echo def chk(p, fmt): >> "!PY_STATUS!"
+echo     if not os.path.exists(p): return False >> "!PY_STATUS!"
+echo     try: >> "!PY_STATUS!"
+echo         with open(p) as f: raw = f.read() >> "!PY_STATUS!"
+echo         if fmt == 'toml': return '[mcp_servers.magent]' in raw >> "!PY_STATUS!"
+echo         if fmt == 'yaml': return '  magent:' in raw >> "!PY_STATUS!"
+echo         return '"magent"' in json.dumps(json.load(open(p))) >> "!PY_STATUS!"
+echo     except: return False >> "!PY_STATUS!"
+echo rows = [ >> "!PY_STATUS!"
+echo     ('claudedesktop        ', r'!DESKTOP_CONFIG!', 'json'), >> "!PY_STATUS!"
+echo     ('claude (workspace)   ', r'!CODE_CONFIG!', 'json'), >> "!PY_STATUS!"
+echo     ('claude (global)      ', r'!USERPROFILE!\.claude.json', 'json'), >> "!PY_STATUS!"
+echo     ('cursor (workspace)   ', r'!_PARENT!\.cursor\mcp.json', 'json'), >> "!PY_STATUS!"
+echo     ('cursor (global)      ', r'!USERPROFILE!\.cursor\mcp.json', 'json'), >> "!PY_STATUS!"
+echo     ('windsurf             ', r'!WINDSURF_CONFIG!', 'json'), >> "!PY_STATUS!"
+echo     ('vscode (workspace)   ', r'!VSCODE_CONFIG!', 'json'), >> "!PY_STATUS!"
+echo     ('gemini (workspace)   ', r'!_PARENT!\.gemini\settings.json', 'json'), >> "!PY_STATUS!"
+echo     ('gemini (global)      ', r'!USERPROFILE!\.gemini\settings.json', 'json'), >> "!PY_STATUS!"
+echo     ('codex (workspace)    ', r'!_PARENT!\.codex\config.toml', 'toml'), >> "!PY_STATUS!"
+echo     ('codex (global)       ', r'!USERPROFILE!\.codex\config.toml', 'toml'), >> "!PY_STATUS!"
+echo     ('zed                  ', r'!ZED_CONFIG!', 'json'), >> "!PY_STATUS!"
+echo     ('kilo                 ', r'!KILO_CONFIG!', 'json'), >> "!PY_STATUS!"
+echo     ('opencode (workspace) ', r'!_PARENT!\opencode.json', 'json'), >> "!PY_STATUS!"
+echo     ('opencode (global)    ', r'!USERPROFILE!\.config\opencode\opencode.json', 'json'), >> "!PY_STATUS!"
+echo     ('goose                ', r'!GOOSE_CONFIG!', 'yaml'), >> "!PY_STATUS!"
+echo ] >> "!PY_STATUS!"
+echo for lbl, p, fmt in rows: >> "!PY_STATUS!"
+echo     if chk(p, fmt): print(f'   {lbl}  YES  {p}') >> "!PY_STATUS!"
+echo     else: print(f'   {lbl}  NO') >> "!PY_STATUS!"
+echo.
+echo   mageNT v!VERSION! -- Status
+echo   ------------------------------------------------------------------------
+echo   Client               Installed  Config path
+echo   ------------------------------------------------------------------------
+"!VENV_PYTHON!" "!PY_STATUS!"
+echo   ------------------------------------------------------------------------
+if not "!INSTALLED_VERSION!"=="" (
+    echo   Package: v!INSTALLED_VERSION! installed
+) else (
+    echo   Package: not installed
+)
+echo.
+goto :eof
+
+rem ════════════════════════════════════════════════════════
 :configure_client
 set "_ct=%~1"
 set "_vp=%~2"
@@ -621,51 +824,113 @@ set "_sp=%~3"
 
 if "!_ct!"=="claudedesktop"  goto :cc_desktop
 if "!_ct!"=="claude"         goto :cc_code
+if "!_ct!"=="cursor"   goto :cc_cursor
+if "!_ct!"=="windsurf" goto :cc_windsurf
+if "!_ct!"=="vscode"   goto :cc_vscode
+if "!_ct!"=="gemini"   goto :cc_gemini
+if "!_ct!"=="codex"    goto :cc_codex
+if "!_ct!"=="zed"      goto :cc_zed
 if "!_ct!"=="kilo"     goto :cc_kilo
 if "!_ct!"=="opencode" goto :cc_opencode
 if "!_ct!"=="goose"    goto :cc_goose
+if "!_ct!"=="pidev"    goto :cc_pidev
 if "!_ct!"=="both"     goto :cc_both
 if "!_ct!"=="all"      goto :cc_all
 echo   ERROR: Unknown client type: !_ct! >&2
 goto :eof
 
 :cc_desktop
-echo   Client: Claude Desktop
-echo   Config: !DESKTOP_CONFIG!
-call :_configure_one_path "!DESKTOP_CONFIG!" "!_vp!" "!_sp!"
+if not "!UNINSTALL!"=="true" ( echo   Client: Claude Desktop & echo   Config: !DESKTOP_CONFIG! )
+call :_configure_one_path "!DESKTOP_CONFIG!" "!_vp!" "!_sp!" "Claude Desktop"
 goto :eof
 
 :cc_code
 if "!GLOBAL_CONFIG!"=="true" (
-    echo   Client: Claude Code ^(global^)
+    if not "!UNINSTALL!"=="true" echo   Client: Claude Code ^(global^)
     set "_code_cfg=!USERPROFILE!\.claude.json"
-    echo   Config: !_code_cfg!
-    call :_configure_one_path "!_code_cfg!" "!_vp!" "!_sp!"
+    if not "!UNINSTALL!"=="true" echo   Config: !_code_cfg!
+    call :_configure_one_path "!_code_cfg!" "!_vp!" "!_sp!" "Claude Code (global)"
 ) else (
-    echo   Client: Claude Code ^(workspace^)
-    echo   Config: !CODE_CONFIG!
-    call :_configure_one_path "!CODE_CONFIG!" "!_vp!" "!_sp!"
+    if not "!UNINSTALL!"=="true" ( echo   Client: Claude Code ^(workspace^) & echo   Config: !CODE_CONFIG! )
+    call :_configure_one_path "!CODE_CONFIG!" "!_vp!" "!_sp!" "Claude Code"
+)
+goto :eof
+
+:cc_cursor
+if not "!UNINSTALL!"=="true" ( echo   Client: Cursor & echo   Config: !CURSOR_CONFIG! )
+call :_configure_one_path "!CURSOR_CONFIG!" "!_vp!" "!_sp!" "Cursor"
+goto :eof
+
+:cc_windsurf
+if not "!UNINSTALL!"=="true" ( echo   Client: Windsurf ^(global^) & echo   Config: !WINDSURF_CONFIG! )
+call :_configure_one_path "!WINDSURF_CONFIG!" "!_vp!" "!_sp!" "Windsurf"
+goto :eof
+
+:cc_vscode
+if "!UNINSTALL!"=="true" (
+    if exist "!VSCODE_CONFIG!" "!_vp!" "!PY_REMOVE_VSCODE!" "!VSCODE_CONFIG!"
+) else (
+    echo   Client: VS Code ^(workspace^)
+    echo   Config: !VSCODE_CONFIG!
+    echo   Note: for global VS Code config, use the VS Code command palette
+    if exist "!VSCODE_CONFIG!" (
+        for /f "tokens=*" %%T in ('powershell -command "Get-Date -Format yyyyMMddHHmmss"') do set "_ts=%%T"
+        copy /y "!VSCODE_CONFIG!" "!VSCODE_CONFIG!.backup.!_ts!" >nul
+        echo   Backed up existing config
+    )
+    "!_vp!" "!PY_MERGE_VSCODE!" "!VSCODE_CONFIG!" "!_sp!"
+    echo   OK: MCP config updated
+)
+goto :eof
+
+:cc_gemini
+if not "!UNINSTALL!"=="true" ( echo   Client: Gemini CLI & echo   Config: !GEMINI_CONFIG! )
+call :_configure_one_path "!GEMINI_CONFIG!" "!_vp!" "!_sp!" "Gemini CLI"
+goto :eof
+
+:cc_codex
+if "!UNINSTALL!"=="true" (
+    if exist "!CODEX_CONFIG!" "!_vp!" "!PY_REMOVE_CODEX!" "!CODEX_CONFIG!"
+) else (
+    echo   Client: OpenAI Codex CLI
+    echo   Config: !CODEX_CONFIG!
+    if exist "!CODEX_CONFIG!" (
+        for /f "tokens=*" %%T in ('powershell -command "Get-Date -Format yyyyMMddHHmmss"') do set "_ts=%%T"
+        copy /y "!CODEX_CONFIG!" "!CODEX_CONFIG!.backup.!_ts!" >nul
+        echo   Backed up existing config
+    )
+    "!_vp!" "!PY_MERGE_CODEX!" "!CODEX_CONFIG!" "!_sp!"
+    echo   OK: MCP config updated
+)
+goto :eof
+
+:cc_zed
+if "!UNINSTALL!"=="true" (
+    if exist "!ZED_CONFIG!" "!_vp!" "!PY_REMOVE_ZED!" "!ZED_CONFIG!"
+) else (
+    echo   Client: Zed ^(global^)
+    echo   Config: !ZED_CONFIG!
+    if exist "!ZED_CONFIG!" (
+        for /f "tokens=*" %%T in ('powershell -command "Get-Date -Format yyyyMMddHHmmss"') do set "_ts=%%T"
+        copy /y "!ZED_CONFIG!" "!ZED_CONFIG!.backup.!_ts!" >nul
+        echo   Backed up existing config
+    )
+    "!_vp!" "!PY_MERGE_ZED!" "!ZED_CONFIG!" "!_sp!"
+    echo   OK: MCP config updated
 )
 goto :eof
 
 :cc_kilo
-echo   Client: Kilo Code
-echo   Config: !KILO_CONFIG!
-call :_configure_one_path "!KILO_CONFIG!" "!_vp!" "!_sp!"
+if not "!UNINSTALL!"=="true" ( echo   Client: Kilo Code & echo   Config: !KILO_CONFIG! )
+call :_configure_one_path "!KILO_CONFIG!" "!_vp!" "!_sp!" "Kilo Code"
 goto :eof
 
 :cc_opencode
-echo   Client: OpenCode
-echo   Config: !OPENCODE_CONFIG!
 if "!UNINSTALL!"=="true" (
-    if exist "!OPENCODE_CONFIG!" (
-        for /f "tokens=*" %%T in ('powershell -command "Get-Date -Format yyyyMMddHHmmss"') do set "_ts=%%T"
-        copy /y "!OPENCODE_CONFIG!" "!OPENCODE_CONFIG!.backup.!_ts!" >nul
-        "!_vp!" "!PY_REMOVE_OPENCODE!" "!OPENCODE_CONFIG!"
-    ) else (
-        echo   Config not found, nothing to remove
-    )
+    if exist "!OPENCODE_CONFIG!" "!_vp!" "!PY_REMOVE_OPENCODE!" "!OPENCODE_CONFIG!"
 ) else (
+    echo   Client: OpenCode
+    echo   Config: !OPENCODE_CONFIG!
     if exist "!OPENCODE_CONFIG!" (
         for /f "tokens=*" %%T in ('powershell -command "Get-Date -Format yyyyMMddHHmmss"') do set "_ts=%%T"
         copy /y "!OPENCODE_CONFIG!" "!OPENCODE_CONFIG!.backup.!_ts!" >nul
@@ -677,15 +942,12 @@ if "!UNINSTALL!"=="true" (
 goto :eof
 
 :cc_goose
-echo   Client: Goose
-echo   Config: !GOOSE_CONFIG!
+if not "!UNINSTALL!"=="true" ( echo   Client: Goose & echo   Config: !GOOSE_CONFIG! )
 if "!UNINSTALL!"=="true" (
     if exist "!GOOSE_CONFIG!" (
         for /f "tokens=*" %%T in ('powershell -command "Get-Date -Format yyyyMMddHHmmss"') do set "_ts=%%T"
         copy /y "!GOOSE_CONFIG!" "!GOOSE_CONFIG!.backup.!_ts!" >nul
         "!_vp!" "!PY_REMOVE_GOOSE!" "!GOOSE_CONFIG!"
-    ) else (
-        echo   Config not found, nothing to remove
     )
 ) else (
     if exist "!GOOSE_CONFIG!" (
@@ -696,6 +958,15 @@ if "!UNINSTALL!"=="true" (
     "!_vp!" "!PY_MERGE_GOOSE!" "!GOOSE_CONFIG!" "!_sp!"
     echo   OK: MCP config updated
 )
+goto :eof
+
+:cc_pidev
+echo   Client: pi.dev
+echo.
+echo   pi.dev does not support MCP servers natively.
+echo   pi.dev uses TypeScript extensions and CLI tools instead.
+echo   To use mageNT concepts in pi.dev, see: https://pi.dev/docs/extensions
+echo.
 goto :eof
 
 :cc_both
@@ -709,51 +980,48 @@ call :configure_client "claudedesktop" "!_vp!" "!_sp!"
 echo.
 call :configure_client "claude" "!_vp!" "!_sp!"
 if "!UNINSTALL!"=="true" (
-    echo.
-    call :configure_client "kilo" "!_vp!" "!_sp!"
-    echo.
-    call :configure_client "opencode" "!_vp!" "!_sp!"
-    echo.
-    call :configure_client "goose" "!_vp!" "!_sp!"
+    echo. & call :configure_client "cursor" "!_vp!" "!_sp!"
+    echo. & call :configure_client "windsurf" "!_vp!" "!_sp!"
+    echo. & call :configure_client "vscode" "!_vp!" "!_sp!"
+    echo. & call :configure_client "gemini" "!_vp!" "!_sp!"
+    echo. & call :configure_client "codex" "!_vp!" "!_sp!"
+    echo. & call :configure_client "zed" "!_vp!" "!_sp!"
+    echo. & call :configure_client "kilo" "!_vp!" "!_sp!"
+    echo. & call :configure_client "opencode" "!_vp!" "!_sp!"
+    echo. & call :configure_client "goose" "!_vp!" "!_sp!"
 ) else (
-    if exist "!KILO_CONFIG!" (
-        echo.
-        call :configure_client "kilo" "!_vp!" "!_sp!"
-    )
-    if exist "!OPENCODE_CONFIG!" (
-        echo.
-        call :configure_client "opencode" "!_vp!" "!_sp!"
-    ) else if exist "!USERPROFILE!\.config\opencode\opencode.json" (
-        echo.
-        call :configure_client "opencode" "!_vp!" "!_sp!"
-    )
-    if exist "!GOOSE_CONFIG!" (
-        echo.
-        call :configure_client "goose" "!_vp!" "!_sp!"
-    )
+    if exist "!_PARENT!\.cursor\mcp.json" ( echo. & call :configure_client "cursor" "!_vp!" "!_sp!" )
+    if exist "!USERPROFILE!\.cursor\mcp.json" ( echo. & call :configure_client "cursor" "!_vp!" "!_sp!" )
+    if exist "!WINDSURF_CONFIG!" ( echo. & call :configure_client "windsurf" "!_vp!" "!_sp!" )
+    if exist "!VSCODE_CONFIG!" ( echo. & call :configure_client "vscode" "!_vp!" "!_sp!" )
+    if exist "!_PARENT!\.gemini\settings.json" ( echo. & call :configure_client "gemini" "!_vp!" "!_sp!" )
+    if exist "!USERPROFILE!\.gemini\settings.json" ( echo. & call :configure_client "gemini" "!_vp!" "!_sp!" )
+    if exist "!_PARENT!\.codex\config.toml" ( echo. & call :configure_client "codex" "!_vp!" "!_sp!" )
+    if exist "!USERPROFILE!\.codex\config.toml" ( echo. & call :configure_client "codex" "!_vp!" "!_sp!" )
+    if exist "!ZED_CONFIG!" ( echo. & call :configure_client "zed" "!_vp!" "!_sp!" )
+    if exist "!KILO_CONFIG!" ( echo. & call :configure_client "kilo" "!_vp!" "!_sp!" )
+    if exist "!OPENCODE_CONFIG!" ( echo. & call :configure_client "opencode" "!_vp!" "!_sp!" )
+    if exist "!USERPROFILE!\.config\opencode\opencode.json" ( echo. & call :configure_client "opencode" "!_vp!" "!_sp!" )
+    if exist "!GOOSE_CONFIG!" ( echo. & call :configure_client "goose" "!_vp!" "!_sp!" )
 )
 goto :eof
 
 rem ════════════════════════════════════════════════════════
-rem Subroutine: _configure_one_path <config_path> <venv_python> <server_py>
-rem Handles standard mcpServers format (install and uninstall)
 :_configure_one_path
 set "_cfg=%~1"
 set "_vp2=%~2"
 set "_sp2=%~3"
+set "_lbl=%~4"
 
 if "!UNINSTALL!"=="true" (
     if exist "!_cfg!" (
         for /f "usebackq delims=" %%T in (`powershell -NoProfile -Command "Get-Date -Format yyyyMMddHHmmss"`) do set "_ts=%%T"
         copy /y "!_cfg!" "!_cfg!.backup.!_ts!" >nul
-        "!_vp2!" "!PY_REMOVE!" "!_cfg!"
-    ) else (
-        echo   Config not found, nothing to remove
+        "!_vp2!" "!PY_REMOVE!" "!_cfg!" "!_lbl!"
     )
     goto :eof
 )
 
-rem Check if up to date
 if exist "!_cfg!" (
     if not "!FORCE!"=="true" (
         for /f "usebackq delims=" %%R in (`"!_vp2!" "!PY_CHECK!" "!_cfg!" "!_vp2!" 2^>nul`) do set "_chk=%%R"
@@ -767,7 +1035,6 @@ if exist "!_cfg!" (
     )
 )
 
-rem Backup if exists
 if exist "!_cfg!" (
     for /f "tokens=*" %%T in ('powershell -command "Get-Date -Format yyyyMMddHHmmss"') do set "_ts=%%T"
     copy /y "!_cfg!" "!_cfg!.backup.!_ts!" >nul
