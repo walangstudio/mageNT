@@ -108,3 +108,7 @@ class AutomationQA(BaseAgent):
             "Integrating full test suites into GitHub Actions or Jenkins pipelines",
             "Building Allure or ReportPortal test reporting dashboards",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["testing"]

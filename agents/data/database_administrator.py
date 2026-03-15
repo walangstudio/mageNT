@@ -68,3 +68,7 @@ class DatabaseAdministrator(BaseAgent):
             "Troubleshooting database performance issues",
             "Planning backup and disaster recovery",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["data", "security"]

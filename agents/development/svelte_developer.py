@@ -65,3 +65,7 @@ class SvelteDeveloper(BaseAgent):
             "Optimizing bundle size compared to heavier frameworks",
             "Writing Svelte applications with TypeScript",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "principles", "testing"]

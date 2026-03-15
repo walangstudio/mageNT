@@ -68,3 +68,7 @@ class VueDeveloper(BaseAgent):
             "Building single-page applications",
             "Creating component libraries",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "principles", "testing"]

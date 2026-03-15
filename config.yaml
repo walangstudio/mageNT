@@ -147,20 +147,9 @@ agents:
     specialization: Root Cause Analysis, Stack Traces, Performance Profiling, Log
       Analysis
 llm:
-  mode: claude_pro
-  api:
-    provider: anthropic
-    model: claude-sonnet-4-20250514
-    api_key_env: ANTHROPIC_API_KEY
-    base_url: null
-    max_tokens: 4096
-    temperature: 0.7
-  local:
-    provider: ollama
-    model: llama3.1
-    base_url: http://localhost:11434
-    max_tokens: 4096
-    temperature: 0.7
+  llm_dispatch: false
+  # Provider routing is configured in providers.yaml (cwd) or mageNT/config/providers.yaml.
+  # Set MAGENT_PROVIDERS env var to point to a custom path.
 workflows:
   full_stack_web:
     enabled: true

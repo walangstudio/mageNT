@@ -68,3 +68,7 @@ class PHPDeveloper(BaseAgent):
             "Implementing OAuth2 and JWT authentication in Laravel",
             "Designing multi-tenant SaaS backends with PHP",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "algorithms", "principles", "ddd", "testing"]

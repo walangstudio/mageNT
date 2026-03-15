@@ -3,6 +3,19 @@
 from typing import Dict, List, Optional, Any
 
 
+_CAPABILITY_BLOCKS = {
+    "patterns":   "- Software design patterns (GoF: Creational, Structural, Behavioural; Architectural: CQRS, Event Sourcing, Saga, Strangler Fig, Sidecar)",
+    "algorithms": "- Algorithm design and complexity analysis (Big-O, space/time trade-offs, dynamic programming, concurrency patterns)",
+    "principles": "- Engineering principles: SOLID, DRY, YAGNI, Law of Demeter, Separation of Concerns, clean code",
+    "ddd":        "- Domain-Driven Design (bounded contexts, aggregates, ubiquitous language)",
+    "security":   "- Security fundamentals: OWASP Top 10, threat modelling, least privilege, secrets management, input validation",
+    "data":       "- Data modelling, query optimisation, indexing strategies, schema migrations, ACID guarantees",
+    "delivery":   "- SDLC, Definition of Done, risk management, go/no-go criteria, stakeholder communication",
+    "ux":         "- User research methods, WCAG accessibility, design systems, information architecture, usability heuristics",
+    "testing":    "- Testing pyramid, TDD/BDD, test isolation, mocking strategies, CI integration",
+}
+
+
 class PromptBuilder:
     """Builds system prompts for agents."""
 
@@ -14,20 +27,8 @@ class PromptBuilder:
         responsibilities: List[str],
         best_practices: Optional[List[str]] = None,
         context: Optional[str] = None,
+        capability_tags: Optional[List[str]] = None,
     ) -> str:
-        """Build a system prompt for an agent.
-
-        Args:
-            role: The agent's role (e.g., "Business Analyst")
-            expertise_level: Level of expertise (e.g., "senior", "principal")
-            specialization: Specific areas of expertise
-            responsibilities: List of key responsibilities
-            best_practices: Optional list of best practices to follow
-            context: Optional additional context
-
-        Returns:
-            Formatted system prompt string.
-        """
         prompt_parts = [
             f"You are a {expertise_level} {role} with expertise in: {specialization}.",
             "",
@@ -52,21 +53,16 @@ class PromptBuilder:
                 context,
             ])
 
-        prompt_parts.extend([
-            "",
-            "As a principal-level engineer you bring deep mastery of:",
-            "- Software design patterns (GoF: Creational, Structural, Behavioural; Architectural: CQRS, Event Sourcing, Saga, Strangler Fig, Sidecar)",
-            "- Algorithm design and complexity analysis (Big-O, space/time trade-offs, dynamic programming, graph algorithms, concurrency patterns)",
-            "- Engineering principles: SOLID, DRY, YAGNI, Law of Demeter, Separation of Concerns",
-            "- Clean code, refactoring strategies, and technical debt management",
-            "- Domain-Driven Design (bounded contexts, aggregates, ubiquitous language)",
-        ])
+        if capability_tags:
+            blocks = [_CAPABILITY_BLOCKS[tag] for tag in capability_tags if tag in _CAPABILITY_BLOCKS]
+            if blocks:
+                prompt_parts.extend(["", "Deep mastery of:"])
+                prompt_parts.extend(blocks)
 
         prompt_parts.extend([
             "",
-            "Provide detailed, actionable guidance based on your expertise.",
-            "Be specific and include code examples where appropriate.",
-            "Consider edge cases and potential issues.",
+            "Be precise and direct. Match response length to the complexity of the question.",
+            "Prioritise correctness and relevance over comprehensiveness.",
         ])
 
         return "\n".join(prompt_parts)
@@ -78,17 +74,6 @@ class PromptBuilder:
         total_steps: int,
         previous_outputs: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
-        """Build context for a workflow step.
-
-        Args:
-            workflow_name: Name of the workflow
-            current_step: Current step number (1-indexed)
-            total_steps: Total number of steps
-            previous_outputs: Optional list of previous step outputs
-
-        Returns:
-            Workflow context string.
-        """
         context_parts = [
             f"You are working on workflow: {workflow_name}",
             f"Current step: {current_step} of {total_steps}",
@@ -118,25 +103,5 @@ class PromptBuilder:
         expertise: str,
         use_cases: List[str],
     ) -> str:
-        """Format a tool description for MCP.
-
-        Args:
-            agent_name: Internal name of the agent
-            agent_role: Human-readable role
-            expertise: Areas of expertise
-            use_cases: When to use this agent
-
-        Returns:
-            Formatted tool description.
-        """
-        desc_parts = [
-            f"Consult the {agent_role} for guidance.",
-            f"Expertise: {expertise}",
-            "",
-            "Use when:",
-        ]
-
-        for use_case in use_cases:
-            desc_parts.append(f"- {use_case}")
-
-        return "\n".join(desc_parts)
+        triggers = use_cases[:3]
+        return f"{agent_role} ({expertise}). Use for: {'; '.join(triggers)}."
