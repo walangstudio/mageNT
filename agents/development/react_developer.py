@@ -68,3 +68,7 @@ class ReactDeveloper(BaseAgent):
             "Writing tests for React components",
             "Modernizing legacy React code",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "principles", "testing"]

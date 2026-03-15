@@ -87,3 +87,7 @@ class QAEngineer(BaseAgent):
             "Reviewing code for testability and identifying missing test scenarios",
             "Defining acceptance criteria and validating them before release",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["testing"]

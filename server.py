@@ -366,17 +366,12 @@ class MageNTServer:
                     ]
                 context = arguments.get("context")
 
+                llm_result = agent.dispatch_to_llm(task=task, context=context)
+                if llm_result is not None:
+                    return [TextContent(type="text", text=llm_result)]
+
                 result = agent.process_request(task=task, context=context)
-
-                # Return the guidance for Claude to follow
-                response = [
-                    TextContent(
-                        type="text",
-                        text=f"You are now consulting with the {agent.role}.\n\n{result['guidance']}",
-                    )
-                ]
-
-                return response
+                return [TextContent(type="text", text=result['guidance'])]
 
             # Handle workflow tools
             elif name == "list_workflows":

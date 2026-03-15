@@ -61,15 +61,15 @@ class BaseAgent(ABC):
         """
         return ["General tasks related to " + self.role]
 
-    def get_system_prompt(self, context: Optional[str] = None) -> str:
-        """Generate the system prompt for this agent.
+    @property
+    def capability_tags(self) -> List[str]:
+        """Capability blocks to inject into the system prompt.
 
-        Args:
-            context: Optional additional context (e.g., workflow state)
-
-        Returns:
-            System prompt string that guides Claude's responses.
+        Override in subclasses to select relevant domains.
         """
+        return []
+
+    def get_system_prompt(self, context: Optional[str] = None) -> str:
         return PromptBuilder.build_agent_prompt(
             role=self.role,
             expertise_level=self.expertise_level,
@@ -77,6 +77,7 @@ class BaseAgent(ABC):
             responsibilities=self.responsibilities,
             best_practices=self.best_practices,
             context=context,
+            capability_tags=self.capability_tags,
         )
 
     def get_tool_description(self) -> str:
@@ -113,32 +114,47 @@ class BaseAgent(ABC):
         """
         system_prompt = self.get_system_prompt(context)
 
-        # Build the full context
-        full_context = []
+        parts = [system_prompt, "---"]
         if previous_outputs:
-            full_context.append("=== Previous Work ===")
-            for output in previous_outputs:
-                agent_name = output.get('agent', 'Unknown')
-                result = output.get('result', 'No output')
-                full_context.append(f"\n{agent_name}:\n{result}\n")
-
-        if context:
-            full_context.append(f"=== Additional Context ===\n{context}\n")
-
-        full_context.append(f"=== Your Task ===\n{task}")
+            parts.append("Previous work:")
+            for o in previous_outputs:
+                parts.append(f"{o.get('agent')}: {o.get('result', '')}")
+            parts.append("---")
+        parts.append(task)
 
         return {
             "agent": self.name,
             "role": self.role,
             "system_prompt": system_prompt,
             "task": task,
-            "full_context": "\n".join(full_context),
-            "guidance": (
-                f"Respond as a {self.expertise_level} {self.role}. "
-                f"{system_prompt}\n\n"
-                f"Now address this task:\n{task}"
-            ),
+            "guidance": "\n\n".join(parts),
         }
+
+    def dispatch_to_llm(
+        self,
+        task: str,
+        context: Optional[str] = None,
+    ) -> Optional[str]:
+        """Dispatch task to an LLM if llm_dispatch is enabled in config.
+
+        Returns the LLM response string, or None if dispatch is disabled.
+        """
+        try:
+            from utils.config_loader import ConfigLoader
+        except ImportError:
+            from ..utils.config_loader import ConfigLoader
+
+        llm_config = ConfigLoader().get_llm_config()
+        if not llm_config.get("llm_dispatch", False):
+            return None
+
+        try:
+            from utils.llm_adapter import dispatch
+        except ImportError:
+            from ..utils.llm_adapter import dispatch
+
+        system_prompt = self.get_system_prompt()
+        return dispatch(self.name, system_prompt, task, context)
 
     def __repr__(self) -> str:
         """String representation of the agent."""

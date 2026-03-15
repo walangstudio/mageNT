@@ -69,3 +69,7 @@ class PythonBackend(BaseAgent):
             "Writing comprehensive API tests",
             "Migrating from Flask/Django to FastAPI",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "algorithms", "principles", "ddd", "testing"]

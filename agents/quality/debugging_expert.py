@@ -73,3 +73,7 @@ class DebuggingExpert(BaseAgent):
             "Debugging authentication/authorization issues",
             "Investigating data inconsistency problems",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["algorithms", "principles"]

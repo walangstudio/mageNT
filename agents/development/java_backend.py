@@ -74,3 +74,7 @@ class JavaBackend(BaseAgent):
             "Migrating legacy Java applications",
             "Optimizing application performance",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "algorithms", "principles", "ddd", "testing"]
