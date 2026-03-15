@@ -63,3 +63,7 @@ class ReactNativeDeveloper(BaseAgent):
             "Setting up OTA updates with Expo EAS Update",
             "Writing Detox or Maestro end-to-end tests for mobile flows",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "principles", "testing"]

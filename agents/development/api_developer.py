@@ -68,3 +68,7 @@ class APIDeveloper(BaseAgent):
             "Migrating from REST to GraphQL",
             "Designing webhook systems",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "principles", "security"]

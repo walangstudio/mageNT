@@ -68,3 +68,7 @@ class NextJSDeveloper(BaseAgent):
             "Setting up internationalization",
             "Optimizing for SEO and Core Web Vitals",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "principles", "testing"]

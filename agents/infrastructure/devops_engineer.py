@@ -68,3 +68,7 @@ class DevOpsEngineer(BaseAgent):
             "Setting up automated testing in CI",
             "Implementing deployment strategies",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["principles", "security"]

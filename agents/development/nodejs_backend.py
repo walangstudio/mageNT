@@ -74,3 +74,7 @@ class NodeJSBackend(BaseAgent):
             "Setting up API documentation",
             "Implementing security best practices",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "algorithms", "principles", "ddd", "testing"]

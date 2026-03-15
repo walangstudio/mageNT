@@ -67,3 +67,7 @@ class ProductManager(BaseAgent):
             "Balancing stakeholder requests",
             "Conducting product discovery",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["delivery"]

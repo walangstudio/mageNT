@@ -1,0 +1,37 @@
+default_provider: passthrough   # passthrough | anthropic | ollama | <any key in providers>
+
+providers:
+  anthropic:
+    default_model: claude-sonnet-4-6
+    # api_key: sk-ant-...   (prefer ANTHROPIC_API_KEY env var)
+
+  ollama:
+    default_model: llama3.1
+    base_url: http://localhost:11434
+
+  # openai:
+  #   type: openai_compatible
+  #   default_model: gpt-4o
+  #   base_url: https://api.openai.com/v1
+
+  # groq:
+  #   type: openai_compatible
+  #   default_model: llama-3.3-70b-versatile
+  #   base_url: https://api.groq.com/openai/v1
+
+  # openrouter:
+  #   type: openai_compatible
+  #   default_model: openai/gpt-4o
+  #   base_url: https://openrouter.ai/api/v1
+
+  # lmstudio:
+  #   type: openai_compatible
+  #   default_model: loaded-model-name
+  #   base_url: http://localhost:1234/v1
+
+agent_providers: {}
+#   system_architect: anthropic
+#   security_engineer: anthropic
+
+model_per_agent: {}
+#   system_architect: claude-opus-4-6
