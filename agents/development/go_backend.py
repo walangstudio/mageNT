@@ -75,3 +75,7 @@ class GoBackend(BaseAgent):
             "Creating efficient middleware",
             "Optimizing for performance",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "algorithms", "principles", "ddd", "testing"]

@@ -94,14 +94,12 @@ class ConfigLoader:
         if not isinstance(self.config['agents'], dict):
             raise ValueError("'agents' section must be a dictionary")
 
-        # Validate LLM section
+        # Validate LLM section — accept both old format (mode key) and new format (default_provider)
         llm_config = self.config['llm']
-        if 'mode' not in llm_config:
-            raise ValueError("'llm.mode' is required")
-
-        valid_modes = ['claude_pro', 'api', 'local']
-        if llm_config['mode'] not in valid_modes:
-            raise ValueError(f"'llm.mode' must be one of: {valid_modes}")
+        if 'mode' in llm_config:
+            valid_modes = ['claude_pro', 'api', 'local']
+            if llm_config['mode'] not in valid_modes:
+                raise ValueError(f"'llm.mode' must be one of: {valid_modes}")
 
     def get_enabled_agents(self) -> Dict[str, Dict[str, Any]]:
         """Get all enabled agents.
@@ -147,12 +145,8 @@ class ConfigLoader:
         return self.config['llm']
 
     def get_llm_mode(self) -> str:
-        """Get the LLM mode (claude_pro, api, or local).
-
-        Returns:
-            LLM mode string.
-        """
-        return self.config['llm']['mode']
+        """Get the LLM mode (backward-compat) or 'passthrough' if not set."""
+        return self.config['llm'].get('mode', 'passthrough')
 
     def get_workflows(self) -> Dict[str, Dict[str, Any]]:
         """Get all workflow templates.

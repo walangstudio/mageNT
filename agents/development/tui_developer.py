@@ -82,3 +82,7 @@ class TUIDeveloper(BaseAgent):
             "Adding spinners and animated progress indicators to long-running CLI tools (bubbles, indicatif, Rich)",
             "Implementing particle and visual effects in terminal apps (TTE rain/fire, Ratatui Canvas, Asciimatics sprites)",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["principles", "testing"]

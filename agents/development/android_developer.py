@@ -65,3 +65,7 @@ class AndroidDeveloper(BaseAgent):
             "Writing Espresso and UI Automator tests",
             "Optimizing Android app performance and battery usage",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "principles", "testing"]

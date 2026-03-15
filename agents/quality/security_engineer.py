@@ -68,3 +68,7 @@ class SecurityEngineer(BaseAgent):
             "Conducting threat modeling",
             "Security hardening for production deployment",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["security", "patterns"]

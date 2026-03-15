@@ -68,3 +68,7 @@ class MobileDeveloper(BaseAgent):
             "Implementing mobile authentication",
             "Building mobile-first experiences",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "principles", "testing"]
