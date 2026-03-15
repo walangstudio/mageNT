@@ -68,3 +68,7 @@ class DotNetBackend(BaseAgent):
             "Building enterprise applications",
             "Migrating from .NET Framework",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "algorithms", "principles", "ddd", "testing"]

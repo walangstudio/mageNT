@@ -75,3 +75,7 @@ class CLIInstallerDeveloper(BaseAgent):
             "Writing a GitHub Actions release workflow that builds and uploads installer artifacts",
             "Implementing environment variable and PATH configuration across multiple shell types",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["principles", "testing"]

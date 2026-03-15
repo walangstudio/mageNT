@@ -68,3 +68,7 @@ class CloudArchitect(BaseAgent):
             "Designing auto-scaling strategies",
             "Planning multi-cloud deployments",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "security", "delivery"]

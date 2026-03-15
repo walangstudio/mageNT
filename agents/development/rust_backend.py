@@ -60,3 +60,7 @@ class RustBackend(BaseAgent):
             "Embedded and resource-constrained targets",
             "Rewriting performance-critical services from other languages",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "algorithms", "principles", "ddd", "testing"]

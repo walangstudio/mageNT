@@ -68,3 +68,7 @@ class PerformanceEngineer(BaseAgent):
             "Creating performance test suites",
             "Planning capacity and scaling",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["algorithms", "data"]
