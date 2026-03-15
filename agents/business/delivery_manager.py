@@ -63,3 +63,7 @@ class DeliveryManager(BaseAgent):
             "Validating that all acceptance criteria have been addressed",
             "Ensuring documentation, tests, and deployment steps are all present",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["delivery"]

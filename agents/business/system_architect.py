@@ -68,3 +68,7 @@ class SystemArchitect(BaseAgent):
             "Solving scalability challenges",
             "Integrating multiple systems",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "algorithms", "principles", "ddd"]

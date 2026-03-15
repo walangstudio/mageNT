@@ -65,3 +65,7 @@ class IOSDeveloper(BaseAgent):
             "Writing XCTest unit and XCUITest UI automation tests",
             "Optimizing iOS app performance and memory with Instruments",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "principles", "testing"]

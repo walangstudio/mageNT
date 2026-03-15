@@ -67,3 +67,7 @@ class FullStackDeveloper(BaseAgent):
             "Adding new features to existing applications",
             "Code review for full-stack changes",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "principles", "ddd", "testing"]

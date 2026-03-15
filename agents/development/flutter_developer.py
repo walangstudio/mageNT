@@ -62,3 +62,7 @@ class FlutterDeveloper(BaseAgent):
             "Building Flutter web or desktop alongside mobile",
             "Setting up CI/CD for Flutter with Fastlane or Codemagic",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "principles", "testing"]

@@ -59,3 +59,7 @@ class IntegrationSpecialist(BaseAgent):
             "Implementing webhook ingestion and delivery systems",
             "Bridging legacy systems with modern services",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["patterns", "principles"]

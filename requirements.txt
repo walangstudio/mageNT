@@ -4,9 +4,8 @@ mcp>=1.0.0
 # Configuration
 pyyaml>=6.0
 
-# Optional: For API provider support (Phase 2)
-# anthropic>=0.18.0
-# openai>=1.0.0
+# Optional: For API provider support (enable llm_dispatch in config.yaml)
+anthropic>=0.18.0
 
-# Optional: For local model support (Phase 3)
-# requests>=2.31.0
+# Optional: For Ollama and OpenAI-compatible provider support
+requests>=2.31.0

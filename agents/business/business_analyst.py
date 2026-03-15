@@ -55,3 +55,7 @@ class BusinessAnalyst(BaseAgent):
             "Need help prioritizing features",
             "Want to document functional and non-functional requirements",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["delivery"]

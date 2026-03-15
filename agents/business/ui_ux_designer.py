@@ -68,3 +68,7 @@ class UIUXDesigner(BaseAgent):
             "Defining interaction patterns",
             "Accessibility audits and improvements",
         ]
+
+    @property
+    def capability_tags(self) -> List[str]:
+        return ["ux"]
