@@ -6,6 +6,69 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.0] - 2026-03-20
+
+### Added
+
+#### Spec-Driven Development (SDD)
+
+Five new MCP tools that implement a structured spec → architecture → parallel build → audit cycle:
+
+- `create_spec` — Business Analyst generates a requirements spec from project name, description, and a list of raw requirements. Stores to `specs/{spec_id}/spec.md` with YAML front-matter. Returns a spec ID used by all subsequent tools.
+- `create_arch_spec` — System Architect generates a full architecture spec (tech stack, component design, API contracts, data models) from a requirements spec. Stores to `specs/{spec_id}/arch_spec.md`.
+- `run_parallel_agents` — Runs multiple domain agents concurrently via `asyncio.gather`. Auto-selects agents from the arch spec using keyword scanning when no explicit list is given. Default phases: `build` (implementation agents) and `qa` (QA + Security). Results auto-saved to `specs/{spec_id}/phase_{phase}_results.json`.
+- `audit_spec` — Delivery Manager audits all phase results against the original acceptance checklist. Auto-loads saved phase results — no manual data passing required. Returns per-requirement `MET`/`PARTIAL`/`MISSING` status and a go/no-go decision.
+- `list_specs` — Lists all specs in the store with metadata.
+
+New supporting modules:
+- `utils/spec_store.py` — file I/O for spec lifecycle with path-traversal protection
+- `utils/spec_builder.py` — pure prompt/context builders; context (reference material) and task (instruction) are kept separate to avoid prompt degradation
+- `utils/skill_registry.py` — skill instantiation, agent→skill affinities, and keyword-based skill auto-selection
+- `utils/parallel_orchestrator.py` — async orchestrator with per-agent timeout (90s) and word-boundary keyword matching
+
+#### Skill MCP Tools
+
+10 skills now exposed directly as `skill_*` MCP tools callable from any client:
+
+- `skill_debug_code` — structured debugging guidance
+- `skill_analyze_error` — error/exception analysis
+- `skill_scaffold_react` — React + Vite project scaffold
+- `skill_scaffold_nextjs` — Next.js App Router scaffold
+- `skill_scaffold_fastapi` — FastAPI + Pydantic scaffold
+- `skill_scaffold_express` — Express.js scaffold
+- `skill_security_scan` — OWASP-aligned security checklist
+- `skill_generate_tests` — test generation guidance
+- `skill_run_tests` — test runner guidance
+- `skill_check_versions` — dependency version and compatibility check
+
+Skills are also auto-invoked during `run_parallel_agents` based on the arch spec content and each agent's affinity set.
+
+#### Workflows
+
+- `tdd` — 9-step Test-Driven Development workflow following the red-green-refactor cycle: acceptance criteria → testable architecture → failing tests (red) → minimum implementation (green) → refactor → E2E suite → security review → documentation → delivery sign-off
+
+#### TDD Prompt
+
+- `start_workflow` — when starting any non-TDD workflow, appends an optional suggestion to use the `tdd` workflow instead
+- `create_spec` — after spec creation, surfaces the `tdd` workflow as an alternative to the standard `create_arch_spec` flow
+
+### Changed
+
+#### Agent Enhancements
+
+- `base.py` — added `dispatch_to_llm_async` for non-blocking parallel LLM dispatch; uses `get_running_loop()` (replaces deprecated `get_event_loop()`)
+
+#### New Agents (1)
+
+- `sdet` — Software Development Engineer in Test. Focuses on test architecture, testability engineering, test infrastructure (Testcontainers, factories, harnesses), toolchain ownership (coverage enforcement, mutation testing, property-based testing), and CI quality gates. Distinct from `qa_engineer` (strategy/manual) and `automation_qa` (E2E framework execution).
+
+#### Prompt Quality
+
+- `utils/prompt_builder.py` — `expertise_level` now rendered with `.capitalize()` so config value `"principal"` displays as `"Principal"` in all system prompts
+- `utils/spec_builder.py` — context builders (reference material passed as LLM context) and task builders (instructions only) are strictly separated; no role re-statement in task strings; arch spec content never duplicated between task and context
+
+---
+
 ## [0.3.0] - 2026-02-24
 
 ### Added

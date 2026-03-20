@@ -1,5 +1,6 @@
 """Base agent class for all specialized agents."""
 
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
@@ -155,6 +156,14 @@ class BaseAgent(ABC):
 
         system_prompt = self.get_system_prompt()
         return dispatch(self.name, system_prompt, task, context)
+
+    async def dispatch_to_llm_async(
+        self,
+        task: str,
+        context: Optional[str] = None,
+    ) -> Optional[str]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.dispatch_to_llm, task, context)
 
     def __repr__(self) -> str:
         """String representation of the agent."""
