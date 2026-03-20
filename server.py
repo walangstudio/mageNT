@@ -8,6 +8,7 @@ can use to improve code quality and development workflows.
 """
 
 import sys
+from pathlib import Path
 from typing import Any, Dict, Optional, List
 
 from mcp.server import Server
@@ -15,6 +16,15 @@ from mcp.types import Tool, TextContent
 
 from utils.config_loader import ConfigLoader
 from workflows.templates import WorkflowOrchestrator
+from utils.spec_store import SpecStore
+from utils.skill_registry import build_skill_registry
+from utils.parallel_orchestrator import ParallelOrchestrator
+from utils.spec_builder import (
+    build_requirements_spec_context,
+    build_requirements_spec_task,
+    build_arch_spec_task,
+    build_audit_task,
+)
 
 # Import rules and hooks systems
 from rules import RulesEngine, RulesConfig, RuleContext, RuleCategory, check_code
@@ -60,6 +70,7 @@ from agents.quality.qa_engineer import QAEngineer
 from agents.quality.security_engineer import SecurityEngineer
 from agents.quality.performance_engineer import PerformanceEngineer
 from agents.quality.automation_qa import AutomationQA
+from agents.quality.sdet import SDET
 from agents.quality.debugging_expert import DebuggingExpert
 
 # Infrastructure agents
@@ -104,6 +115,7 @@ AGENT_CLASSES = {
     "security_engineer": SecurityEngineer,
     "performance_engineer": PerformanceEngineer,
     "automation_qa": AutomationQA,
+    "sdet": SDET,
     "debugging_expert": DebuggingExpert,
     # Infrastructure
     "devops_engineer": DevOpsEngineer,
@@ -132,6 +144,14 @@ class MageNTServer:
         self.workflow_orchestrator = WorkflowOrchestrator(
             workflows_config, self.agent_registry
         )
+
+        # Initialize SDD components
+        self.spec_store = SpecStore(Path(__file__).parent / "specs")
+        self.skill_registry = build_skill_registry()
+        self.parallel_orchestrator = ParallelOrchestrator(
+            self.agent_registry, self.skill_registry, self.spec_store
+        )
+        print(f"SDD: {len(self.skill_registry)} skills loaded", file=sys.stderr)
 
         # Initialize rules engine
         self.rules_engine = RulesEngine()
@@ -277,6 +297,85 @@ class MageNTServer:
                         },
                         "required": ["rule_name"],
                     },
+                ),
+            ])
+
+            # Add skill tools
+            for skill_name, skill in self.skill_registry.items():
+                tools.append(
+                    Tool(
+                        name=f"skill_{skill_name}",
+                        description=skill.get_tool_description(),
+                        inputSchema=skill.get_input_schema(),
+                    )
+                )
+
+            # Add SDD tools
+            tools.extend([
+                Tool(
+                    name="create_spec",
+                    description="Generate a structured requirements spec for a project. Returns spec_id used by other SDD tools.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "project_name": {"type": "string", "description": "Name of the project"},
+                            "description": {"type": "string", "description": "Brief project description"},
+                            "requirements": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of requirements or acceptance criteria",
+                            },
+                        },
+                        "required": ["project_name", "description", "requirements"],
+                    },
+                ),
+                Tool(
+                    name="create_arch_spec",
+                    description="Generate a technical architecture spec from a requirements spec. Requires create_spec to have been called first.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "spec_id": {"type": "string", "description": "Spec ID returned by create_spec"},
+                        },
+                        "required": ["spec_id"],
+                    },
+                ),
+                Tool(
+                    name="run_parallel_agents",
+                    description="Run multiple agents in parallel against the arch spec. Phase 'build' for implementation guidance, 'qa' for quality review.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "spec_id": {"type": "string", "description": "Spec ID returned by create_spec"},
+                            "phase": {"type": "string", "description": "'build' or 'qa'"},
+                            "agents": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Optional list of agent names. Auto-detected from arch spec if omitted.",
+                            },
+                        },
+                        "required": ["spec_id", "phase"],
+                    },
+                ),
+                Tool(
+                    name="audit_spec",
+                    description="Audit phase results against the original requirements checklist. Returns per-requirement MET/PARTIAL/MISSING status and a GO/NO_GO decision.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "spec_id": {"type": "string", "description": "Spec ID returned by create_spec"},
+                            "phase_results": {
+                                "type": "object",
+                                "description": "Optional dict of agent_name → result text. Loaded from last run_parallel_agents if omitted.",
+                            },
+                        },
+                        "required": ["spec_id"],
+                    },
+                ),
+                Tool(
+                    name="list_specs",
+                    description="List all spec-driven development specs created in this workspace.",
+                    inputSchema={"type": "object", "properties": {}},
                 ),
             ])
 
@@ -432,10 +531,16 @@ class MageNTServer:
                     workflow_name, task_description
                 )
 
+                tdd_nudge = (
+                    "\n\n---\n💡 **Would you like to follow Test-Driven Development (TDD)?**\n"
+                    "Use `start_workflow` with `workflow_name: tdd` to apply a red-green-refactor cycle instead. "
+                    "TDD works well for this type of project — it's entirely optional."
+                ) if workflow_name != "tdd" else ""
+
                 response = [
                     TextContent(
                         type="text",
-                        text=f"{plan}\n\nYou can now proceed to consult each agent in sequence using their respective tools.",
+                        text=f"{plan}\n\nYou can now proceed to consult each agent in sequence using their respective tools.{tdd_nudge}",
                     )
                 ]
 
@@ -454,7 +559,7 @@ class MageNTServer:
                 for agent_name, agent in self.agent_registry.items():
                     agent_list.append(f"**{agent.role}** (`consult_{agent_name}`)")
                     agent_list.append(f"  Expertise: {agent.specialization}")
-                    agent_list.append(f"  Level: {agent.expertise_level}")
+                    agent_list.append(f"  Level: {agent.expertise_level.capitalize()}")
                     agent_list.append("")
 
                 return [TextContent(type="text", text="\n".join(agent_list))]
@@ -646,6 +751,168 @@ class MageNTServer:
                 if report.passed and rules_report.passed:
                     lines.append("No issues found. Code edit looks good!")
 
+                return [TextContent(type="text", text="\n".join(lines))]
+
+            # Handle skill tools
+            elif name.startswith("skill_"):
+                skill_name = name.removeprefix("skill_")
+                skill = self.skill_registry.get(skill_name)
+                if not skill:
+                    return [TextContent(type="text", text=f"Error: Skill '{skill_name}' not found")]
+                result = skill.execute(**arguments)
+                return [TextContent(type="text", text=result["guidance"])]
+
+            # Handle SDD tools
+            elif name == "create_spec":
+                project_name = arguments.get("project_name", "").strip()
+                description = arguments.get("description", "").strip()
+                requirements = arguments.get("requirements", [])
+                if not project_name:
+                    return [TextContent(type="text", text="Error: 'project_name' is required")]
+                if not requirements:
+                    return [TextContent(type="text", text="Error: 'requirements' must be a non-empty list")]
+
+                spec_id = SpecStore.make_spec_id(project_name)
+                spec_path = self.spec_store.create(spec_id, project_name, description, requirements)
+
+                # Ask business analyst to refine the spec; if LLM enabled, overwrite the file
+                ba = self.agent_registry.get("business_analyst")
+                refinement = ""
+                if ba:
+                    task = build_requirements_spec_task()
+                    context = build_requirements_spec_context(project_name, description, requirements)
+                    llm_result = ba.dispatch_to_llm(task=task, context=context)
+                    if llm_result:
+                        spec_path.write_text(llm_result, encoding="utf-8")
+                        refinement = llm_result
+                    else:
+                        refinement = spec_path.read_text(encoding="utf-8")
+                else:
+                    refinement = spec_path.read_text(encoding="utf-8")
+
+                tdd_nudge = (
+                    "\n\n---\n💡 **Would you like to follow Test-Driven Development (TDD)?**\n"
+                    "Use `start_workflow` with `workflow_name: tdd` to apply a red-green-refactor cycle for this project. "
+                    "It's entirely optional — you can proceed with `create_arch_spec` to continue the standard spec-driven flow."
+                )
+
+                return [TextContent(type="text", text="\n".join([
+                    f"# Spec Created",
+                    f"spec_id: {spec_id}",
+                    f"path: {spec_path}",
+                    f"",
+                    refinement,
+                ]) + tdd_nudge)]
+
+            elif name == "create_arch_spec":
+                spec_id = arguments.get("spec_id", "").strip()
+                if not spec_id:
+                    return [TextContent(type="text", text="Error: 'spec_id' is required")]
+                if not self.spec_store.exists(spec_id):
+                    return [TextContent(type="text", text=f"Error: Spec '{spec_id}' not found. Run create_spec first.")]
+
+                spec_data = self.spec_store.load(spec_id)
+                task = build_arch_spec_task()
+
+                arch = self.agent_registry.get("system_architect")
+                if arch:
+                    # requirements spec is the context; task is the instruction
+                    llm_result = arch.dispatch_to_llm(task=task, context=spec_data["content"])
+                    arch_content = llm_result if llm_result else arch.process_request(task=task, context=spec_data["content"])["guidance"]
+                else:
+                    arch_content = f"# Architecture Spec\n\n(system_architect agent not available — enable it in config.yaml)\n\n## Requirements Reference\n\n{spec_data['content']}"
+
+                arch_path = self.spec_store.save_arch_spec(spec_id, arch_content)
+
+                return [TextContent(type="text", text="\n".join([
+                    f"# Architecture Spec Created",
+                    f"spec_id: {spec_id}",
+                    f"path: {arch_path}",
+                    f"",
+                    arch_content,
+                ]))]
+
+            elif name == "run_parallel_agents":
+                spec_id = arguments.get("spec_id", "").strip()
+                phase = arguments.get("phase", "build").strip()
+                agents = arguments.get("agents")
+
+                if not spec_id:
+                    return [TextContent(type="text", text="Error: 'spec_id' is required")]
+                if phase not in ("build", "qa"):
+                    return [TextContent(type="text", text="Error: 'phase' must be 'build' or 'qa'")]
+                if agents is not None and not agents:
+                    return [TextContent(type="text", text="Error: 'agents' must be a non-empty list or omitted for auto-detection")]
+                if not self.spec_store.exists(spec_id):
+                    return [TextContent(type="text", text=f"Error: Spec '{spec_id}' not found")]
+                if not self.spec_store.arch_spec_exists(spec_id):
+                    return [TextContent(type="text", text=f"Error: arch_spec.md not found for '{spec_id}'. Run create_arch_spec first.")]
+
+                outcome = await self.parallel_orchestrator.run_phase(spec_id, phase, agents)
+
+                lines = [
+                    f"# Parallel Agent Run: {phase.upper()}",
+                    f"spec_id: {spec_id}",
+                    f"duration_ms: {outcome['duration_ms']}",
+                    f"agents: {', '.join(outcome['results'].keys())}",
+                    "",
+                ]
+                for agent_name, result in outcome["results"].items():
+                    agent = self.agent_registry.get(agent_name)
+                    display_name = agent.role if agent else agent_name.replace("_", " ").title()
+                    skills = outcome["skills_invoked"].get(agent_name, [])
+                    lines.append(f"## {display_name}")
+                    if skills:
+                        lines.append(f"_Skills invoked: {', '.join(skills)}_")
+                    lines.append(result)
+                    lines.append("")
+
+                return [TextContent(type="text", text="\n".join(lines))]
+
+            elif name == "audit_spec":
+                spec_id = arguments.get("spec_id", "").strip()
+                phase_results = arguments.get("phase_results")
+
+                if not spec_id:
+                    return [TextContent(type="text", text="Error: 'spec_id' is required")]
+                if not self.spec_store.exists(spec_id):
+                    return [TextContent(type="text", text=f"Error: Spec '{spec_id}' not found")]
+
+                spec_data = self.spec_store.load(spec_id)
+                try:
+                    arch_data = self.spec_store.load_arch_spec(spec_id)
+                    arch_content = arch_data["content"]
+                except Exception:
+                    arch_content = "(arch spec not available)"
+
+                if not phase_results:
+                    # Auto-load from all persisted phase runs for this spec
+                    phase_results = self.spec_store.load_all_phase_results(spec_id)
+                if not phase_results:
+                    return [TextContent(type="text", text="Error: No phase results found for this spec. Run run_parallel_agents first.")]
+
+                audit_prompt = build_audit_task(spec_data["content"], arch_content, phase_results)
+
+                dm = self.agent_registry.get("delivery_manager")
+                if dm:
+                    llm_result = dm.dispatch_to_llm(task=audit_prompt)
+                    audit_text = llm_result if llm_result else dm.process_request(task=audit_prompt)["guidance"]
+                else:
+                    audit_text = audit_prompt
+
+                return [TextContent(type="text", text="\n".join([
+                    f"# Delivery Audit: {spec_id}",
+                    "",
+                    audit_text,
+                ]))]
+
+            elif name == "list_specs":
+                specs = self.spec_store.list_specs()
+                if not specs:
+                    return [TextContent(type="text", text="No specs found. Use create_spec to start.")]
+                lines = ["# Specs\n"]
+                for s in specs:
+                    lines.append(f"- **{s.get('project_name', '?')}** (`{s.get('spec_id', '?')}`) — status: {s.get('status', '?')}")
                 return [TextContent(type="text", text="\n".join(lines))]
 
             else:

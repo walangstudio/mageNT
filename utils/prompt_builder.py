@@ -30,7 +30,7 @@ class PromptBuilder:
         capability_tags: Optional[List[str]] = None,
     ) -> str:
         prompt_parts = [
-            f"You are a {expertise_level} {role} with expertise in: {specialization}.",
+            f"You are a {expertise_level.capitalize()} {role} with expertise in: {specialization}.",
             "",
             "Your key responsibilities:",
         ]
