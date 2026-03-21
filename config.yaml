@@ -141,6 +141,11 @@ agents:
     expertise_level: principal
     specialization: Playwright, Cypress, Selenium, WebdriverIO, Appium, Detox, k6,
       Gatling, Pact, Percy, Cucumber, BDD, GitHub Actions, Allure
+  sdet:
+    enabled: true
+    expertise_level: principal
+    specialization: Test Architecture, Test Infrastructure, Testcontainers, pytest,
+      Jest, JUnit, Mutation Testing, Property-Based Testing, Coverage Enforcement, CI Quality Gates
   debugging_expert:
     enabled: true
     expertise_level: principal
@@ -413,6 +418,28 @@ workflows:
       description: Set up deployment and infrastructure
     - agent: delivery_manager
       description: Completion audit and readiness check
+  tdd:
+    enabled: true
+    description: Test-driven development cycle — tests first, then implementation
+    steps:
+    - agent: business_analyst
+      description: Define acceptance criteria and testable requirements
+    - agent: system_architect
+      description: Design testable architecture with clear component boundaries
+    - agent: qa_engineer
+      description: Write failing unit and integration tests (red phase)
+    - agent: debugging_expert
+      description: Implement minimum code to make tests pass (green phase)
+    - agent: qa_engineer
+      description: Refactor implementation while keeping tests green (refactor phase)
+    - agent: automation_qa
+      description: Create end-to-end and regression test suite
+    - agent: security_engineer
+      description: Security review of implementation and test coverage gaps
+    - agent: technical_writer
+      description: Document tested behaviors and API contracts
+    - agent: delivery_manager
+      description: Verify acceptance criteria coverage and sign-off
   legacy_migration:
     enabled: true
     description: Modernize legacy system

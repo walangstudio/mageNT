@@ -1,6 +1,6 @@
 # mageNT
 
-![version](https://img.shields.io/badge/version-0.3.0-blue)
+![version](https://img.shields.io/badge/version-0.4.0-blue)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
@@ -16,7 +16,7 @@ Ever wish Claude had deep expertise in specific areas? That's what mageNT does. 
 - Building a React app? Get the React Developer
 - Designing an API? Ask the API Developer
 
-Think of it like having 32 senior devs on standby, each with their own specialty.
+Think of it like having 32 senior devs on standby, each with their own specialty. You can also run a full spec-driven development cycle — from requirements to parallel implementation to delivery audit — with a single tool call per step.
 
 ## Quick Start
 
@@ -368,7 +368,7 @@ Consult the Security Engineer about this auth code
 
 ## Who's on the Team
 
-32 agents across different areas:
+33 agents across different areas:
 
 | What they do | Who's available |
 |----------|--------|
@@ -377,9 +377,67 @@ Consult the Security Engineer about this auth code
 | Frontend | React, Next.js, Vue.js, Svelte devs |
 | Backend | Node.js, Python, Java, Go, .NET, Rust, API, Integration specialists |
 | Infrastructure | Database Admin, DevOps, Cloud Architect |
-| Quality & Security | QA, Security Engineer, Performance Engineer, Automation QA |
+| Quality & Security | QA Engineer, SDET, Automation QA, Security Engineer, Performance Engineer |
 | Mobile | Flutter, React Native, Android (Kotlin/Java), iOS (Swift/Obj-C), Mobile Dev |
 | Other | Technical Writer, Debugging Expert, Full-Stack Dev |
+
+## Spec-Driven Development
+
+A structured flow for building new projects or features from scratch:
+
+```
+create_spec → create_arch_spec → run_parallel_agents → audit_spec
+```
+
+**1. Create a requirements spec**
+```
+Create a spec for a blog platform with user auth, post CRUD, and comments
+```
+Returns a `spec_id`. Spec stored to `specs/{spec_id}/spec.md`.
+
+**2. Generate architecture**
+```
+Create an arch spec for spec_id: blog-platform-a1b2c3d4
+```
+System Architect produces tech stack, component design, API contracts, and data models.
+
+**3. Run agents in parallel**
+```
+Run parallel agents for spec_id: blog-platform-a1b2c3d4, phase: build
+```
+Agents are auto-selected from the arch spec using keyword matching. All run concurrently. Results are saved automatically.
+
+```
+Run parallel agents for spec_id: blog-platform-a1b2c3d4, phase: qa
+```
+QA Engineer and Security Engineer review the architecture for risks.
+
+**4. Audit against spec**
+```
+Audit spec: blog-platform-a1b2c3d4
+```
+Delivery Manager checks every acceptance checklist item — `MET`, `PARTIAL`, or `MISSING` — and returns a go/no-go decision.
+
+When starting any workflow or spec, mageNT will ask if you'd like to follow a **TDD cycle** instead. It's optional.
+
+## Skill Tools
+
+10 skills are available as direct MCP tools alongside the agent consultation tools:
+
+| Tool | What it does |
+|------|-------------|
+| `skill_debug_code` | Structured debugging guidance |
+| `skill_analyze_error` | Error/exception root cause analysis |
+| `skill_scaffold_react` | React + Vite project scaffold |
+| `skill_scaffold_nextjs` | Next.js App Router scaffold |
+| `skill_scaffold_fastapi` | FastAPI + Pydantic scaffold |
+| `skill_scaffold_express` | Express.js scaffold |
+| `skill_security_scan` | OWASP-aligned security checklist |
+| `skill_generate_tests` | Test generation guidance |
+| `skill_run_tests` | Test runner guidance |
+| `skill_check_versions` | Dependency version and compatibility check |
+
+Skills are also auto-invoked during `run_parallel_agents` based on the arch spec content.
 
 ## Code Quality Tools
 
@@ -426,6 +484,7 @@ Pre-built workflows coordinate multiple agents:
 - `full_stack_web` - Full web app (frontend + backend + database)
 - `api_service` - API design and implementation
 - `frontend_app` - UI/UX focused
+- `tdd` - Test-driven development (red → green → refactor cycle)
 
 Start one like:
 ```
@@ -479,10 +538,13 @@ mageNT/
 ├── config.yaml         # Your settings
 ├── install.sh          # Automated installer (Linux/macOS/Git Bash)
 ├── install.bat         # Automated installer (Windows CMD/PowerShell)
-├── agents/             # The 32 agents
+├── agents/             # The 33 agents
+├── skills/             # Reusable skills (scaffold, test, debug, security, etc.)
 ├── rules/              # Code quality rules
 ├── hooks/              # Automation hooks
-├── workflows/          # Multi-agent workflows
+├── workflows/          # Multi-agent workflow templates
+├── specs/              # Spec-driven development output (created at runtime)
+├── utils/              # Orchestration, spec store, skill registry, prompt builders
 └── tests/              # Tests
 ```
 

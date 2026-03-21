@@ -5,6 +5,7 @@ from .security_engineer import SecurityEngineer
 from .performance_engineer import PerformanceEngineer
 from .automation_qa import AutomationQA
 from .debugging_expert import DebuggingExpert
+from .sdet import SDET
 
 __all__ = [
     "QAEngineer",
@@ -12,4 +13,5 @@ __all__ = [
     "PerformanceEngineer",
     "AutomationQA",
     "DebuggingExpert",
+    "SDET",
 ]
