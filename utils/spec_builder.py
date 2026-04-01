@@ -6,7 +6,8 @@ Pattern:
   agent.dispatch_to_llm(task=task, context=context)
 """
 
-from typing import Dict, List
+import re
+from typing import Any, Dict, List
 
 
 def build_requirements_spec_context(
@@ -103,3 +104,55 @@ Output format (one line per requirement):
 After the checklist output:
 GO_NO_GO: GO or NO_GO
 SUMMARY: one paragraph delivery assessment"""
+
+
+_AUDIT_LINE_RE = re.compile(
+    r"^\[(MET|PARTIAL|MISSING)\]\s*(.+?)\s*\|\s*(.*)$", re.MULTILINE
+)
+_GO_NO_GO_RE = re.compile(r"GO_NO_GO:\s*(GO|NO.GO)", re.IGNORECASE)
+_SUMMARY_RE = re.compile(r"SUMMARY:\s*(.+?)(?:\n\n|\Z)", re.DOTALL)
+
+
+def parse_audit_to_json(audit_text: str, spec_id: str) -> Dict[str, Any]:
+    """Parse delivery manager audit output into structured JSON.
+
+    Returns a dict matching the contract borch expects:
+    { spec_id, status, requirements: [{name, status, notes}], go_no_go, gaps }
+
+    When audit_text doesn't match the expected format (e.g., guidance-only mode),
+    returns { status: "GUIDANCE_ONLY", raw: audit_text }.
+    """
+    items = _AUDIT_LINE_RE.findall(audit_text)
+    if not items:
+        return {"spec_id": spec_id, "status": "GUIDANCE_ONLY", "raw": audit_text}
+
+    requirements = []
+    gaps = []
+    for status, name, notes in items:
+        status = status.upper()
+        requirements.append({
+            "name": name.strip(),
+            "status": status,
+            "notes": notes.strip(),
+        })
+        if status in ("PARTIAL", "MISSING"):
+            gaps.append(name.strip())
+
+    go_match = _GO_NO_GO_RE.search(audit_text)
+    go_no_go = go_match.group(1).upper().replace("_", "-") if go_match else "NO-GO"
+
+    summary_match = _SUMMARY_RE.search(audit_text)
+    summary = summary_match.group(1).strip() if summary_match else ""
+
+    all_met = all(r["status"] == "MET" for r in requirements)
+    any_missing = any(r["status"] == "MISSING" for r in requirements)
+    overall = "MET" if all_met else ("MISSING" if any_missing else "PARTIAL")
+
+    return {
+        "spec_id": spec_id,
+        "status": overall,
+        "requirements": requirements,
+        "go_no_go": go_no_go,
+        "gaps": gaps,
+        "summary": summary,
+    }

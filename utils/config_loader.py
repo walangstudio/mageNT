@@ -9,6 +9,15 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+# Module-level overrides — set by CLI flags, merged into config on read.
+_GLOBAL_OVERRIDES: Dict[str, Any] = {}
+
+
+def set_global_override(key: str, value: Any) -> None:
+    """Set a global config override (e.g., from --llm-dispatch CLI flag)."""
+    _GLOBAL_OVERRIDES[key] = value
+
+
 def _read_package_version() -> str:
     init_path = Path(__file__).parent.parent / "__init__.py"
     try:
@@ -137,12 +146,10 @@ class ConfigLoader:
         return agent_config.get('enabled', False) if agent_config else False
 
     def get_llm_config(self) -> Dict[str, Any]:
-        """Get LLM configuration.
-
-        Returns:
-            LLM configuration dictionary.
-        """
-        return self.config['llm']
+        """Get LLM configuration, merged with any global overrides."""
+        config = dict(self.config['llm'])
+        config.update(_GLOBAL_OVERRIDES)
+        return config
 
     def get_llm_mode(self) -> str:
         """Get the LLM mode (backward-compat) or 'passthrough' if not set."""

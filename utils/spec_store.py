@@ -138,6 +138,43 @@ status: draft
                 pass
         return combined
 
+    # --- spec-kit compatible output ---
+
+    def create_speckit(self, spec_id: str, project_name: str, spec_content: str) -> Path:
+        """Write spec-kit formatted spec.md."""
+        spec_dir = self._spec_dir(spec_id)
+        spec_dir.mkdir(parents=True, exist_ok=True)
+        path = spec_dir / "spec.md"
+        path.write_text(spec_content, encoding="utf-8")
+        return path
+
+    def save_speckit_plan(self, spec_id: str, content: str) -> Path:
+        """Write spec-kit formatted plan.md."""
+        path = self._spec_dir(spec_id) / "plan.md"
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def save_speckit_tasks(self, spec_id: str, tasks: List[Dict[str, Any]]) -> List[Path]:
+        """Write individual task .md files into tasks/ subdirectory.
+
+        Each task dict must have: name, files, prompt.
+        Generates YAML frontmatter with name and files fields
+        that borch's speckit::parse() can consume.
+        """
+        tasks_dir = self._spec_dir(spec_id) / "tasks"
+        tasks_dir.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for i, task in enumerate(tasks):
+            name = task.get("name", f"task-{i + 1:03d}")
+            files = task.get("files", "")
+            prompt = task.get("prompt", "")
+            filename = f"T{i + 1:03d}-{name}.md"
+            content = f"---\nname: {name}\nfiles: {files}\n---\n\n{prompt}\n"
+            path = tasks_dir / filename
+            path.write_text(content, encoding="utf-8")
+            paths.append(path)
+        return paths
+
     @staticmethod
     def make_spec_id(project_name: str) -> str:
         slug = _slugify(project_name)
