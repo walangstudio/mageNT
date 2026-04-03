@@ -7,6 +7,7 @@ Works with ANY LLM that supports MCP - returns guidance that the calling LLM
 can use to improve code quality and development workflows.
 """
 
+import json
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional, List
@@ -24,6 +25,14 @@ from utils.spec_builder import (
     build_requirements_spec_task,
     build_arch_spec_task,
     build_audit_task,
+    parse_audit_to_json,
+)
+from utils.mememo_client import MememoAdapter, format_memories
+from utils.speckit_builder import (
+    build_speckit_spec,
+    build_speckit_plan,
+    build_speckit_tasks,
+    build_speckit_requirements_spec_task,
 )
 
 # Import rules and hooks systems
@@ -161,6 +170,15 @@ class MageNTServer:
         self.hooks_engine = get_default_engine()
         print(f"Hooks engine loaded with {len(self.hooks_engine.list_hooks())} hooks", file=sys.stderr)
 
+        # Initialize mememo adapter (lazy -- embedding model loads on first use)
+        self.mememo = MememoAdapter()
+        if self.mememo.available:
+            print("mememo: available (lazy init)", file=sys.stderr)
+
+        # Session tracking for mememo persistence
+        self._session_actions: list[str] = []
+        self._session_context: str = ""
+
         # Register MCP tools
         self._register_tools()
 
@@ -206,6 +224,11 @@ class MageNTServer:
                                 "context": {
                                     "type": "string",
                                     "description": "Optional additional context or project information",
+                                },
+                                "format": {
+                                    "type": "string",
+                                    "enum": ["text", "json"],
+                                    "description": "Output format. 'json' wraps response in structured JSON with agent, verdict, guidance fields. Default: 'text'.",
                                 },
                             },
                             "required": ["task"],
@@ -325,8 +348,24 @@ class MageNTServer:
                                 "items": {"type": "string"},
                                 "description": "List of requirements or acceptance criteria",
                             },
+                            "spec_format": {
+                                "type": "string",
+                                "enum": ["default", "speckit"],
+                                "description": "Output format. 'speckit' generates spec-kit compatible files (spec.md, plan.md, tasks/). Default: 'default'.",
+                            },
                         },
                         "required": ["project_name", "description", "requirements"],
+                    },
+                ),
+                Tool(
+                    name="generate_speckit_tasks",
+                    description="Generate spec-kit compatible task files from an existing spec and architecture spec. Creates tasks/ directory consumable by borch's spec converter.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "spec_id": {"type": "string", "description": "Spec ID returned by create_spec"},
+                        },
+                        "required": ["spec_id"],
                     },
                 ),
                 Tool(
@@ -366,7 +405,12 @@ class MageNTServer:
                             "spec_id": {"type": "string", "description": "Spec ID returned by create_spec"},
                             "phase_results": {
                                 "type": "object",
-                                "description": "Optional dict of agent_name → result text. Loaded from last run_parallel_agents if omitted.",
+                                "description": "Optional dict of agent_name -> result text. Loaded from last run_parallel_agents if omitted.",
+                            },
+                            "format": {
+                                "type": "string",
+                                "enum": ["markdown", "json"],
+                                "description": "Output format. 'json' returns structured per-requirement status. Default: 'markdown'.",
                             },
                         },
                         "required": ["spec_id"],
@@ -436,6 +480,33 @@ class MageNTServer:
                 ),
             ])
 
+            # Add mememo tools (available even when mememo is not installed -- returns helpful message)
+            tools.append(
+                Tool(
+                    name="recall_project_context",
+                    description="Search project memory for relevant context, decisions, and prior work. Uses mememo for semantic search across persistent memories.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Search query (e.g., 'authentication decisions', 'recent spec audits')",
+                            },
+                            "top_k": {
+                                "type": "integer",
+                                "description": "Number of results (default: 5)",
+                            },
+                            "tags": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Filter by tags (AND logic)",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                ),
+            )
+
             return tools
 
         @self.server.call_tool()
@@ -464,13 +535,45 @@ class MageNTServer:
                         )
                     ]
                 context = arguments.get("context")
+                output_format = arguments.get("format", "text")
+
+                # Enrich context with mememo project memory
+                if self.mememo.available:
+                    memories = await self.mememo.recall_context(task, top_k=3)
+                    if memories:
+                        prior = format_memories(memories)
+                        context = f"{context}\n\n## Prior Context\n{prior}" if context else f"## Prior Context\n{prior}"
 
                 llm_result = agent.dispatch_to_llm(task=task, context=context)
                 if llm_result is not None:
-                    return [TextContent(type="text", text=llm_result)]
+                    response_text = llm_result
+                else:
+                    result = agent.process_request(task=task, context=context)
+                    response_text = result['guidance']
 
-                result = agent.process_request(task=task, context=context)
-                return [TextContent(type="text", text=result['guidance'])]
+                # Track for session summary
+                self._session_actions.append(f"Consulted {agent_name}: {task[:100]}")
+
+                # Capture instincts from agent guidance (fire-and-forget)
+                if self.mememo.available:
+                    await self.mememo.capture(
+                        pre_extracted=[{
+                            "type": "analysis",
+                            "content": f"[{agent_name}] {task[:200]}\n\n{response_text[:1000]}",
+                            "tags": ["magent", "consult", agent_name],
+                        }],
+                    )
+
+                if output_format == "json":
+                    return [TextContent(type="text", text=json.dumps({
+                        "agent": agent_name,
+                        "verdict": "REVIEW",
+                        "guidance": response_text,
+                        "issues": [],
+                        "suggestions": [],
+                    }, indent=2))]
+
+                return [TextContent(type="text", text=response_text)]
 
             # Handle workflow tools
             elif name == "list_workflows":
@@ -767,28 +870,48 @@ class MageNTServer:
                 project_name = arguments.get("project_name", "").strip()
                 description = arguments.get("description", "").strip()
                 requirements = arguments.get("requirements", [])
+                spec_format = arguments.get("spec_format", "default")
+                if isinstance(requirements, str):
+                    requirements = [line.strip() for line in requirements.splitlines() if line.strip()]
                 if not project_name:
                     return [TextContent(type="text", text="Error: 'project_name' is required")]
                 if not requirements:
                     return [TextContent(type="text", text="Error: 'requirements' must be a non-empty list")]
 
                 spec_id = SpecStore.make_spec_id(project_name)
-                spec_path = self.spec_store.create(spec_id, project_name, description, requirements)
 
-                # Ask business analyst to refine the spec; if LLM enabled, overwrite the file
-                ba = self.agent_registry.get("business_analyst")
-                refinement = ""
-                if ba:
-                    task = build_requirements_spec_task()
-                    context = build_requirements_spec_context(project_name, description, requirements)
-                    llm_result = ba.dispatch_to_llm(task=task, context=context)
-                    if llm_result:
-                        spec_path.write_text(llm_result, encoding="utf-8")
-                        refinement = llm_result
+                if spec_format == "speckit":
+                    # Generate spec-kit compatible output
+                    spec_content = build_speckit_spec(project_name, description, requirements)
+
+                    # Refine via BA if LLM dispatch available
+                    ba = self.agent_registry.get("business_analyst")
+                    if ba:
+                        task = build_speckit_requirements_spec_task()
+                        context = build_requirements_spec_context(project_name, description, requirements)
+                        llm_result = ba.dispatch_to_llm(task=task, context=context)
+                        if llm_result:
+                            spec_content = llm_result
+
+                    spec_path = self.spec_store.create_speckit(spec_id, project_name, spec_content)
+                    refinement = spec_content
+                else:
+                    # Default format
+                    spec_path = self.spec_store.create(spec_id, project_name, description, requirements)
+
+                    ba = self.agent_registry.get("business_analyst")
+                    refinement = ""
+                    if ba:
+                        task = build_requirements_spec_task()
+                        context = build_requirements_spec_context(project_name, description, requirements)
+                        llm_result = ba.dispatch_to_llm(task=task, context=context)
+                        if llm_result:
+                            spec_path.write_text(llm_result, encoding="utf-8")
+                            refinement = llm_result
+                        else:
+                            refinement = spec_path.read_text(encoding="utf-8")
                     else:
                         refinement = spec_path.read_text(encoding="utf-8")
-                else:
-                    refinement = spec_path.read_text(encoding="utf-8")
 
                 tdd_nudge = (
                     "\n\n---\n💡 **Would you like to follow Test-Driven Development (TDD)?**\n"
@@ -796,13 +919,60 @@ class MageNTServer:
                     "It's entirely optional — you can proceed with `create_arch_spec` to continue the standard spec-driven flow."
                 )
 
+                # Store spec creation in mememo
+                self._session_actions.append(f"Created spec {spec_id}: {project_name} (format: {spec_format})")
+                if self.mememo.available:
+                    await self.mememo.store_memory(
+                        content=f"Created spec {spec_id}: {project_name}\n{description}",
+                        type="context",
+                        tags=["magent", "spec", spec_id],
+                    )
+
                 return [TextContent(type="text", text="\n".join([
                     f"# Spec Created",
                     f"spec_id: {spec_id}",
+                    f"format: {spec_format}",
                     f"path: {spec_path}",
                     f"",
                     refinement,
                 ]) + tdd_nudge)]
+
+            elif name == "generate_speckit_tasks":
+                spec_id = arguments.get("spec_id", "").strip()
+                if not spec_id:
+                    return [TextContent(type="text", text="Error: 'spec_id' is required")]
+                if not self.spec_store.exists(spec_id):
+                    return [TextContent(type="text", text=f"Error: Spec '{spec_id}' not found. Run create_spec first.")]
+
+                spec_data = self.spec_store.load(spec_id)
+                try:
+                    arch_data = self.spec_store.load_arch_spec(spec_id)
+                    arch_content = arch_data["content"]
+                except Exception:
+                    arch_content = ""
+
+                # Generate plan.md
+                project_name = spec_data["meta"].get("project_name", spec_id)
+                plan_content = build_speckit_plan(project_name, spec_data["content"], arch_content)
+                plan_path = self.spec_store.save_speckit_plan(spec_id, plan_content)
+
+                # Generate task files
+                tasks = build_speckit_tasks(spec_data["content"], arch_content)
+                task_paths = self.spec_store.save_speckit_tasks(spec_id, tasks)
+
+                self._session_actions.append(f"Generated speckit tasks for {spec_id}: {len(task_paths)} tasks")
+
+                lines = [
+                    f"# spec-kit Tasks Generated",
+                    f"spec_id: {spec_id}",
+                    f"plan: {plan_path}",
+                    f"tasks: {len(task_paths)} files",
+                    "",
+                ]
+                for p in task_paths:
+                    lines.append(f"- {p.name}")
+
+                return [TextContent(type="text", text="\n".join(lines))]
 
             elif name == "create_arch_spec":
                 spec_id = arguments.get("spec_id", "").strip()
@@ -872,6 +1042,7 @@ class MageNTServer:
             elif name == "audit_spec":
                 spec_id = arguments.get("spec_id", "").strip()
                 phase_results = arguments.get("phase_results")
+                output_format = arguments.get("format", "markdown")
 
                 if not spec_id:
                     return [TextContent(type="text", text="Error: 'spec_id' is required")]
@@ -886,7 +1057,6 @@ class MageNTServer:
                     arch_content = "(arch spec not available)"
 
                 if not phase_results:
-                    # Auto-load from all persisted phase runs for this spec
                     phase_results = self.spec_store.load_all_phase_results(spec_id)
                 if not phase_results:
                     return [TextContent(type="text", text="Error: No phase results found for this spec. Run run_parallel_agents first.")]
@@ -899,6 +1069,22 @@ class MageNTServer:
                     audit_text = llm_result if llm_result else dm.process_request(task=audit_prompt)["guidance"]
                 else:
                     audit_text = audit_prompt
+
+                # Store audit decision in mememo
+                audit_json = parse_audit_to_json(audit_text, spec_id)
+                go_no_go = audit_json.get("go_no_go", "NO-GO") if audit_json.get("status") != "GUIDANCE_ONLY" else "GUIDANCE_ONLY"
+                self._session_actions.append(f"Audit {spec_id}: {go_no_go}")
+                if self.mememo.available and go_no_go != "GUIDANCE_ONLY":
+                    await self.mememo.store_decision(
+                        problem=f"Delivery readiness for {spec_id}",
+                        alternatives=["Ship as-is", "Fix gaps first"],
+                        chosen=go_no_go,
+                        rationale=audit_json.get("summary", audit_text[:500]),
+                        tags=["magent", "audit", spec_id],
+                    )
+
+                if output_format == "json":
+                    return [TextContent(type="text", text=json.dumps(audit_json, indent=2))]
 
                 return [TextContent(type="text", text="\n".join([
                     f"# Delivery Audit: {spec_id}",
@@ -915,6 +1101,32 @@ class MageNTServer:
                     lines.append(f"- **{s.get('project_name', '?')}** (`{s.get('spec_id', '?')}`) — status: {s.get('status', '?')}")
                 return [TextContent(type="text", text="\n".join(lines))]
 
+            elif name == "recall_project_context":
+                query = arguments.get("query", "").strip()
+                if not query:
+                    return [TextContent(type="text", text="Error: 'query' is required")]
+
+                if not self.mememo.available:
+                    return [TextContent(type="text", text="mememo is not available. Install mememo in the same Python environment to enable project memory.")]
+
+                top_k = arguments.get("top_k", 5)
+                tags = arguments.get("tags")
+                memories = await self.mememo.recall_context(query, top_k=top_k, tags=tags)
+
+                if not memories:
+                    return [TextContent(type="text", text="No relevant context found.")]
+
+                lines = [f"# Project Context ({len(memories)} results)\n"]
+                for m in memories:
+                    sim = f"{m.get('similarity', 0):.2f}"
+                    mtype = m.get("type", "?")
+                    mtags = m.get("tags", [])
+                    tag_str = f" [{', '.join(mtags)}]" if mtags else ""
+                    lines.append(f"### [{mtype}]{tag_str} (similarity: {sim})")
+                    lines.append(m.get("content", "")[:1000])
+                    lines.append("")
+                return [TextContent(type="text", text="\n".join(lines))]
+
             else:
                 return [
                     TextContent(
@@ -923,28 +1135,65 @@ class MageNTServer:
                     )
                 ]
 
+    def _build_session_summary(self) -> str:
+        if not self._session_actions:
+            return "No actions recorded."
+        lines = [f"mageNT session ({len(self._session_actions)} actions):"]
+        for action in self._session_actions[-50:]:  # cap at 50
+            lines.append(f"- {action}")
+        return "\n".join(lines)
+
     async def run(self) -> None:
         """Run the MCP server."""
         from mcp.server.stdio import stdio_server
 
-        async with stdio_server() as (read_stream, write_stream):
-            await self.server.run(
-                read_stream,
-                write_stream,
-                self.server.create_initialization_options(),
+        # Recall recent project context from mememo on start
+        if self.mememo.available:
+            memories = await self.mememo.recall_context(
+                "recent work, decisions, and project context", top_k=5
             )
+            if memories:
+                self._session_context = format_memories(memories)
+                print(f"mememo: recalled {len(memories)} context memories", file=sys.stderr)
+
+        try:
+            async with stdio_server() as (read_stream, write_stream):
+                await self.server.run(
+                    read_stream,
+                    write_stream,
+                    self.server.create_initialization_options(),
+                )
+        finally:
+            # Persist session summary to mememo on shutdown
+            if self.mememo.available and self._session_actions:
+                await self.mememo.end_session(
+                    summary=self._build_session_summary(),
+                    tags=["magent-session"],
+                )
 
 
 def main():
     """Main entry point for the server."""
+    import argparse
     import asyncio
+    from utils.config_loader import set_global_override
 
-    # Allow optional config path as command-line argument
-    config_path = sys.argv[1] if len(sys.argv) > 1 else None
+    parser = argparse.ArgumentParser(description="mageNT MCP Server")
+    parser.add_argument("config", nargs="?", default=None, help="Path to config.yaml")
+    parser.add_argument(
+        "--llm-dispatch", action="store_true",
+        help="Enable LLM dispatch (overrides config.yaml llm_dispatch setting)",
+    )
+    args = parser.parse_args()
+
+    if args.llm_dispatch:
+        set_global_override("llm_dispatch", True)
 
     try:
-        server = MageNTServer(config_path)
+        server = MageNTServer(args.config)
         print("mageNT MCP Server starting...", file=sys.stderr)
+        if args.llm_dispatch:
+            print("LLM dispatch: enabled via --llm-dispatch flag", file=sys.stderr)
         asyncio.run(server.run())
     except Exception as e:
         print(f"Error starting server: {e}", file=sys.stderr)
