@@ -45,6 +45,31 @@ class BaseSkill(ABC):
         """
         return []
 
+    @property
+    def allowed_tools(self) -> List[str]:
+        """Claude Code tools this skill is allowed to invoke.
+
+        Consumed by tools/generate_dispatch.py to populate the SKILL.md
+        ``allowed-tools`` frontmatter. Default to read-only review tools;
+        scaffold/edit skills should override.
+        """
+        return ["Read", "Grep", "Glob", "Bash"]
+
+    @property
+    def when_to_activate(self) -> List[str]:
+        """Bullet points for the skill's "When to Activate" section."""
+        return []
+
+    @property
+    def workflow(self) -> List[str]:
+        """Numbered steps for the skill's workflow body."""
+        return []
+
+    @property
+    def output_schema(self) -> str:
+        """Templated output the skill should produce. Empty = none."""
+        return ""
+
     @abstractmethod
     def execute(self, **kwargs) -> Dict[str, Any]:
         """Execute the skill with given parameters.
