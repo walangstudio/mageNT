@@ -17,6 +17,13 @@ SKIP_TEST=false
 GLOBAL_CONFIG=false
 CLIENT_EXPLICIT=false
 STATUS=false
+MODE="auto"           # auto | mcp | skills | subagents | hybrid
+PROFILE="full"        # full | minimal | skills | subagents
+SCOPE="ask"           # ask | user | project
+AGENTS_DIR=""
+SKILLS_DIR=""
+REGENERATE=false
+DRY_RUN=false
 
 # ── Parse flags ─────────────────────────────────────────
 show_help() {
@@ -35,6 +42,14 @@ Options:
       --global        Write to global config path (claude, cursor, gemini, codex,
                       opencode, all)
       --skip-test     Skip test_server.py validation
+      --mode MODE     auto|mcp|skills|subagents|hybrid (default: auto;
+                      claude→hybrid, others→mcp)
+      --profile P     full|minimal|skills|subagents (default: full)
+      --scope S       ask|user|project (Claude Code only; default: ask)
+      --agents-dir D  Override target agents/ directory (Claude Code only)
+      --skills-dir D  Override target skills/ directory (Claude Code only)
+      --regenerate    Re-run the dispatch generator before installing
+      --dry-run       Print actions without writing
   -h, --help          Show this help
 
 Examples:
@@ -68,10 +83,74 @@ while [[ $# -gt 0 ]]; do
         -c|--client)         CLIENT="$2"; CLIENT_EXPLICIT=true; shift 2 ;;
         --global)            GLOBAL_CONFIG=true; shift ;;
         --skip-test)         SKIP_TEST=true; shift ;;
+        --mode)              MODE="$2"; shift 2 ;;
+        --profile)           PROFILE="$2"; shift 2 ;;
+        --scope)             SCOPE="$2"; shift 2 ;;
+        --agents-dir)        AGENTS_DIR="$2"; shift 2 ;;
+        --skills-dir)        SKILLS_DIR="$2"; shift 2 ;;
+        --regenerate)        REGENERATE=true; shift ;;
+        --dry-run)           DRY_RUN=true; shift ;;
         -h|--help)           show_help ;;
         *) echo "Unknown option: $1"; show_help ;;
     esac
 done
+
+# ── Multi-mode dispatch helpers ─────────────────────────
+resolve_mode() {
+    if [[ "$MODE" != "auto" ]]; then
+        echo "$MODE"
+        return
+    fi
+    case "$CLIENT" in
+        claude) echo "hybrid" ;;
+        *) echo "mcp" ;;
+    esac
+}
+
+resolve_dispatch_target() {
+    if [[ -n "$AGENTS_DIR" || -n "$SKILLS_DIR" ]]; then
+        echo "${AGENTS_DIR%/agents}${AGENTS_DIR:+}"
+        return
+    fi
+    case "$SCOPE" in
+        user)    echo "$HOME/.claude" ;;
+        project) echo "$WORKSPACE_DIR/.claude" ;;
+        ask)
+            if [[ "$FORCE" == true ]]; then
+                echo "$HOME/.claude"
+                return
+            fi
+            local answer
+            read -rp "  Install subagents/skills for all projects (~/.claude/) or just this one (.claude/)? [A/p] " answer >&2
+            if [[ "$answer" =~ ^[Pp]$ ]]; then
+                echo "$WORKSPACE_DIR/.claude"
+            else
+                echo "$HOME/.claude"
+            fi
+            ;;
+        *) echo "$HOME/.claude" ;;
+    esac
+}
+
+run_dispatch_generator() {
+    local target="$1"
+    local action="$2"  # generate | uninstall
+    local venv_py="$3"
+    local extra_args=()
+    [[ "$DRY_RUN" == true ]] && extra_args+=("--dry-run")
+    [[ "$FORCE" == true ]] && extra_args+=("--force")
+    case "$PROFILE" in
+        subagents|skills) extra_args+=("--profile" "$PROFILE") ;;
+    esac
+
+    if [[ "$action" == "uninstall" ]]; then
+        "$venv_py" "$MAGENT_DIR/tools/generate_dispatch.py" \
+            --target "$target" --uninstall "${extra_args[@]}"
+    else
+        "$venv_py" "$MAGENT_DIR/tools/generate_dispatch.py" \
+            --target "$target" "${extra_args[@]}"
+    fi
+}
 
 # ── Helpers ─────────────────────────────────────────────
 info()  { echo "  $*"; }
@@ -956,6 +1035,15 @@ if [[ "$UNINSTALL" == true ]]; then
 
     configure_client "$CLIENT" "$VENV_PYTHON" ""
 
+    if [[ "$CLIENT" == "claude" || "$CLIENT" == "all" ]]; then
+        for cand in "$HOME/.claude" "$WORKSPACE_DIR/.claude"; do
+            if [[ -f "$cand/.magent-manifest.json" ]]; then
+                info "Removing managed subagents/skills from $cand"
+                run_dispatch_generator "$cand" "uninstall" "$VENV_PYTHON" || true
+            fi
+        done
+    fi
+
     rm -f "$MAGENT_DIR/$MARKER_FILE"
     info "Removed version marker"
 
@@ -1105,10 +1193,34 @@ if [[ "$SKIP_TEST" != true ]]; then
 fi
 
 # 6. Configure MCP client
-info "Configuring MCP client..."
-SERVER_PY="$MAGENT_DIR/server.py"
-configure_client "$CLIENT" "$VENV_PYTHON" "$SERVER_PY"
-echo ""
+RESOLVED_MODE="$(resolve_mode)"
+case "$RESOLVED_MODE" in
+    mcp|hybrid)
+        info "Configuring MCP client..."
+        SERVER_PY="$MAGENT_DIR/server.py"
+        configure_client "$CLIENT" "$VENV_PYTHON" "$SERVER_PY"
+        echo ""
+        ;;
+    skills|subagents)
+        info "Skipping MCP install (mode=$RESOLVED_MODE)"
+        SERVER_PY="$MAGENT_DIR/server.py"
+        echo ""
+        ;;
+esac
+
+# 6b. Install subagents / skills if applicable
+case "$RESOLVED_MODE" in
+    hybrid|skills|subagents)
+        if [[ "$CLIENT" != "claude" ]]; then
+            info "mode=$RESOLVED_MODE requires -c claude; skipping subagent/skill install."
+        else
+            DISPATCH_TARGET="$(resolve_dispatch_target)"
+            info "Installing subagents/skills into $DISPATCH_TARGET (profile=$PROFILE)"
+            run_dispatch_generator "$DISPATCH_TARGET" "generate" "$VENV_PYTHON"
+            echo ""
+        fi
+        ;;
+esac
 
 # 7. Write marker
 echo "$VERSION" > "$MAGENT_DIR/$MARKER_FILE"

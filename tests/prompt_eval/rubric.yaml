@@ -1,0 +1,63 @@
+# Five-dimension rubric scored 1-5. The judge prompt instructs the evaluator
+# to score independently per dimension and quote evidence from the response.
+
+dimensions:
+  opinionatedness:
+    summary: Does the response take a defensible position with named trade-offs?
+    anchors:
+      "1": Generic platitudes; presents options without choosing.
+      "2": Names options but hedges on which to pick.
+      "3": Recommends one option with weak rationale.
+      "4": Picks one option and names a trade-off.
+      "5": Picks one option, names the trade-off accepted, and the alternative it rejects.
+  scope_discipline:
+    summary: Does the response stay in scope and defer cleanly to other specialists?
+    anchors:
+      "1": Answers far outside the agent's lane; tries to do everything.
+      "2": Mostly drifts out of lane.
+      "3": Mostly in scope but misses obvious deferrals.
+      "4": Stays in scope; punts most out-of-scope items.
+      "5": Cleanly defers each out-of-scope topic to the right specialist by name.
+  output_structure:
+    summary: Is the output templated and parseable?
+    anchors:
+      "1": Free-form prose, no structure.
+      "2": A few headings; mostly narrative.
+      "3": Headings present, partial templating.
+      "4": Mostly templated (severity tags, table rows, ADR sections).
+      "5": Fully templated, downstream-parseable, matches the agent's declared output schema.
+  conciseness:
+    summary: Length matches task complexity; no filler or restating.
+    anchors:
+      "1": Restates question, padded prose, > 2× the needed length.
+      "2": Noticeably long; some filler.
+      "3": Length acceptable; minor padding.
+      "4": Tight; no filler.
+      "5": Length exactly matches task complexity; one-line answer when warranted.
+  actionability:
+    summary: Can a reader act on every finding without follow-up clarification?
+    anchors:
+      "1": Vague "consider X" recommendations.
+      "2": Some concrete actions; many are abstract.
+      "3": Most actions have a target file or step.
+      "4": Every finding has file:line + concrete fix; recommendation has named conditions.
+      "5": Findings include code-level fixes / commands; recommendation has a smallest-set GO list.
+  parseability:
+    summary: Does the response round-trip through the agent's declared Pydantic schema?
+    anchors:
+      "1": Free-form prose; cannot be parsed as JSON at all.
+      "2": JSON-shaped but malformed (unmatched braces, trailing commas, prose mixed in).
+      "3": Valid JSON but missing one or more required fields the schema demands.
+      "4": Valid JSON, all required fields present, but at least one optional field misused (wrong enum, wrong type).
+      "5": Validates cleanly under `Schema.model_validate_json(text)`; every required field populated correctly.
+  template_adherence:
+    summary: Beyond schema validity, does the response use the declared anchors / sections meaningfully?
+    anchors:
+      "1": Schema fields populated with placeholder or generic content (e.g. severity always HIGH, fix is "TBD").
+      "2": Half the populated fields are substantive; the rest are filler.
+      "3": Most fields meaningful but one or two key fields (e.g. attack, fix, evidence) are weak.
+      "4": Every field populated with substantive, agent-specific content.
+      "5": Every field populated, content matches the agent's domain heuristics, and the response would be useful to a downstream consumer without further interpretation.
+
+scale: [1, 2, 3, 4, 5]
+total_max: 35

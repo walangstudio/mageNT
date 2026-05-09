@@ -1,0 +1,311 @@
+# Eight representative tasks used to compare prompt variants.
+# Each task names the agent under test and the user prompt the eval harness
+# will send. Optional ``code`` is appended to the user prompt; ``rubric_focus``
+# tells the judge which rubric dimensions matter most for this task.
+
+tasks:
+  - id: 1
+    agent: security_engineer
+    title: Express route SQL injection + missing auth
+    rubric_focus: [opinionatedness, output_structure, actionability]
+    prompt: |
+      Review this Express route for security issues. Surface every concrete
+      vulnerability you find with severity, evidence, and the smallest fix.
+    code: |
+      const express = require('express');
+      const mysql = require('mysql');
+      const router = express.Router();
+      const db = mysql.createConnection({ host: 'localhost', user: 'root', password: 'admin' });
+
+      router.get('/users/:id', (req, res) => {
+        const q = "SELECT * FROM users WHERE id = " + req.params.id;
+        db.query(q, (err, rows) => {
+          if (err) return res.status(500).send(err.message);
+          res.json(rows);
+        });
+      });
+
+      router.post('/users', (req, res) => {
+        const { name, email, role } = req.body;
+        const q = `INSERT INTO users(name, email, role) VALUES('${name}','${email}','${role}')`;
+        db.query(q, (err, r) => res.json({ id: r.insertId }));
+      });
+
+      module.exports = router;
+
+  - id: 2
+    agent: system_architect
+    title: Should we split this Django monolith?
+    rubric_focus: [opinionatedness, scope_discipline, conciseness]
+    prompt: |
+      We run a Django monolith with ~200k DAU, p99 latency 350ms, six engineers,
+      one Postgres RDS instance. The CEO wants us to "split into microservices"
+      so we can ship faster. Should we? Give a recommendation with the trade-off
+      you accept.
+
+  - id: 3
+    agent: delivery_manager
+    title: v2.4 release readiness audit
+    rubric_focus: [output_structure, actionability, scope_discipline]
+    prompt: |
+      Audit release v2.4 for go/no-go.
+    code: |
+      Release: v2.4 (payments service)
+      - Requirements: Jira EPIC-441, signed off by PM
+      - Design: ADR-022 in docs/adr/ (signed off by architect)
+      - Development: PR #1284 merged, code review by 2 engineers
+      - Tests: unit 92% coverage, no integration tests yet
+      - Security: dependency scan run; no SAST yet
+      - Performance: load test on staging shows p99 within target
+      - Docs: changelog updated; runbook NOT updated
+      - Deployment plan: blue-green via Argo, dry-run done in staging
+      - Rollback: documented but never exercised
+      - Monitoring: existing dashboards untouched; no alerts added for new payment retry path
+
+  - id: 4
+    agent: debugging_expert
+    title: Node TypeError stack trace
+    rubric_focus: [actionability, conciseness]
+    prompt: |
+      Diagnose the root cause and propose the minimal fix. Don't refactor.
+    code: |
+      TypeError: Cannot read properties of undefined (reading 'map')
+          at renderItems (/app/src/components/ItemList.tsx:42:18)
+          at /app/src/components/ItemList.tsx:71:9
+          at /app/node_modules/react/cjs/react.development.js:1042:18
+
+      Code at ItemList.tsx:35-50:
+        const ItemList = ({ items }) => {
+          if (loading) return <Spinner />;
+          return (
+            <ul>
+              {items.map(item => <li key={item.id}>{item.name}</li>)}
+            </ul>
+          );
+        };
+
+      Parent passes items via: <ItemList items={data?.items} loading={isLoading} />
+
+  - id: 5
+    agent: performance_engineer
+    title: p99 latency regression on /search
+    rubric_focus: [opinionatedness, actionability]
+    prompt: |
+      After last week's deploy, p99 latency on /search jumped from 80ms to 600ms.
+      What's likely going on? Give the top 3 hypotheses ranked by likelihood,
+      and the cheapest experiment to falsify the leading one.
+
+  - id: 6
+    agent: qa_engineer
+    title: Test cases for an auth flow
+    rubric_focus: [output_structure, conciseness]
+    prompt: |
+      Generate the smallest set of test cases that exercises this flow.
+      Group by happy path / negative / edge.
+    code: |
+      Auth flow (email + TOTP):
+      1. POST /login {email, password} → 200 with short-lived token + requires_totp=true
+      2. POST /verify-totp {token, code} → 200 with session cookie (HttpOnly, Secure)
+      3. Session cookie expires after 30 minutes idle
+      4. Account locks after 5 failed login attempts in 10 minutes (per email + IP)
+
+  - id: 7
+    agent: system_architect
+    title: DB pick for event-sourced ledger 5k writes/s
+    rubric_focus: [opinionatedness, conciseness]
+    prompt: |
+      We need to pick a database for an event-sourced financial ledger:
+      - 5k writes/s sustained, bursts to 15k/s
+      - append-only events; small projections rebuilt nightly
+      - strict ordering required per account_id
+      - 7-year retention, ~3 TB after 2 years
+      Recommend a DB and explain the trade-off you're accepting.
+
+  - id: 8
+    agent: database_administrator
+    title: Postgres schema indexing audit
+    rubric_focus: [actionability, output_structure]
+    prompt: |
+      Audit this schema for missing/wrong indexes given the query patterns below.
+    code: |
+      CREATE TABLE orders (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        status TEXT NOT NULL,
+        total_cents BIGINT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX idx_orders_status ON orders(status);
+
+      Query patterns:
+      - SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50;
+      - SELECT count(*) FROM orders WHERE status = 'pending' AND created_at > now() - interval '1 hour';
+      - SELECT user_id, sum(total_cents) FROM orders WHERE created_at >= $1 AND created_at < $2 GROUP BY user_id;
+
+  # ---- Hard tasks (Phase 6C): designed to escape rubric saturation. -----
+  # These force opinionatedness under pressure, scope discipline, and
+  # confidence-floor calibration — areas where vanilla baselines tend to
+  # hand-wave or produce well-headed prose without a defensible position.
+
+  - id: 9
+    agent: system_architect
+    title: Sharding vs caching vs replicas under pressure
+    rubric_focus: [opinionatedness, scope_discipline]
+    prompt: |
+      Our Postgres primary is at 80% CPU and we just doubled DAU. The DBs team
+      wants read replicas. The platform team wants Redis caching in front. The
+      most senior backend wants to shard by tenant_id. Each has political weight
+      and a slack thread of supporters. Pick ONE. Name what you give up. No
+      hedging, no "depends".
+  - id: 10
+    agent: security_engineer
+    title: Needle in a haystack — one real bug, five plausible distractors
+    rubric_focus: [actionability, scope_discipline]
+    prompt: |
+      Review for security issues. Surface only findings you can defend with a
+      concrete attack path; do not pad the report with style nits dressed up as
+      vulnerabilities.
+    code: |
+      // service/auth.go
+      package auth
+      import (
+        "crypto/rand"
+        "crypto/sha256"
+        "database/sql"
+        "encoding/hex"
+        "errors"
+        "fmt"
+        "net/http"
+        "time"
+      )
+
+      var ErrInvalid = errors.New("invalid credentials")
+
+      type Service struct{ DB *sql.DB }
+
+      func (s *Service) NewSessionToken() (string, error) {
+        b := make([]byte, 32)
+        if _, err := rand.Read(b); err != nil { return "", err }
+        return hex.EncodeToString(b), nil
+      }
+
+      // hashPassword uses sha256(salt|password). The salt is per-user, 16 bytes.
+      func hashPassword(salt, password string) string {
+        h := sha256.Sum256([]byte(salt + password))
+        return hex.EncodeToString(h[:])
+      }
+
+      func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
+        email := r.FormValue("email")
+        password := r.FormValue("password")
+        var salt, hash string
+        // parameterized — no SQLi
+        err := s.DB.QueryRow(
+          "SELECT salt, password_hash FROM users WHERE email = $1", email,
+        ).Scan(&salt, &hash)
+        if err != nil {
+          http.Error(w, "invalid", http.StatusUnauthorized); return
+        }
+        if hashPassword(salt, password) != hash {
+          http.Error(w, "invalid", http.StatusUnauthorized); return
+        }
+        tok, err := s.NewSessionToken()
+        if err != nil { http.Error(w, "server error", 500); return }
+        // Store session, 30-day expiry.
+        _, _ = s.DB.Exec(
+          "INSERT INTO sessions(token, user_email, expires_at) VALUES ($1,$2,$3)",
+          tok, email, time.Now().Add(30*24*time.Hour),
+        )
+        http.SetCookie(w, &http.Cookie{
+          Name: "session", Value: tok, Path: "/", HttpOnly: true, Secure: true,
+          SameSite: http.SameSiteLaxMode, Expires: time.Now().Add(30*24*time.Hour),
+        })
+        fmt.Fprintln(w, "ok")
+      }
+  - id: 11
+    agent: delivery_manager
+    title: Half-evidence release audit
+    rubric_focus: [scope_discipline, actionability]
+    prompt: |
+      Audit this release. Push back on anything you cannot verify from evidence.
+    code: |
+      Release: v3.1 (notifications service rewrite)
+      - Requirements: "PM verbally signed off in standup last Tuesday"
+      - Design: ADR not written; sketch in a Figma file the architect made
+      - Development: 3 PRs merged into main, no link to a tracking ticket
+      - Tests: "QA team said it looked good"; no test report attached
+      - Security: PM is on PTO; security_engineer has not been pinged
+      - Performance: "should be the same as v3.0, we didn't change the hot path"
+      - Docs: changelog updated
+      - Deployment plan: "we'll do a regular deploy"
+      - Rollback: previous version still in registry; rollback plan not written
+      - Monitoring: existing dashboards
+  - id: 12
+    agent: debugging_expert
+    title: 2% flaky CI test, no repro
+    rubric_focus: [actionability, opinionatedness]
+    prompt: |
+      A CI test fails ~2% of the time on the same commit. The team's instinct
+      is to add a retry. You have ten minutes before the release tag freeze —
+      argue for the smallest correct action, name the most likely root cause
+      class without seeing the test, and what evidence would confirm it.
+  - id: 13
+    agent: performance_engineer
+    title: APM regression — rank hypotheses, falsify cheapest
+    rubric_focus: [opinionatedness, actionability]
+    prompt: |
+      After yesterday's deploy, p99 on /checkout went from 110 ms to 480 ms.
+      No new endpoints; the diff is a 30-line change to the cart-merge code
+      path. Rate of /checkout calls is unchanged. CPU on the app server is
+      flat; DB CPU is up ~25%. Rank the top 5 hypotheses by likelihood and
+      give the single cheapest experiment that would falsify the leader.
+  - id: 14
+    agent: qa_engineer
+    title: Smallest test set with rate-limit + TOTP-replay
+    rubric_focus: [output_structure, conciseness]
+    prompt: |
+      Generate the smallest set of test cases (happy / negative / edge) that
+      gives confidence the auth flow is correct. Do not enumerate every
+      permutation; pick the ones that catch the most bug classes per test.
+    code: |
+      Auth flow:
+      1. POST /login {email, password} -> 200 with {short_token, requires_totp:true}
+      2. POST /verify-totp {short_token, code} -> 200 with session cookie
+      3. Account locks for 15 min after 5 failed logins (per email + IP)
+      4. TOTP code is single-use within its 30s window (server-side replay protection)
+      5. short_token is single-use; expires after 60s; bound to the device fingerprint
+  - id: 15
+    agent: database_administrator
+    title: "Write-throughput ask vs read-path indexes"
+    rubric_focus: [scope_discipline, opinionatedness]
+    prompt: |
+      The platform team asks you to "make inserts as fast as possible" on this
+      schema. You also know the analytics team relies on the indexes for the
+      hourly dashboard. Hold the line — explain what you can and cannot drop,
+      and what the right escalation is.
+    code: |
+      CREATE TABLE events (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        kind TEXT NOT NULL,
+        ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+        payload JSONB
+      );
+      CREATE INDEX idx_events_user_ts ON events(user_id, ts DESC);
+      CREATE INDEX idx_events_kind_ts ON events(kind, ts DESC);
+      CREATE INDEX idx_events_payload_gin ON events USING gin(payload);
+
+      Hourly dashboard query:
+        SELECT kind, count(*) FROM events
+        WHERE ts >= now() - interval '24 hours'
+        GROUP BY kind ORDER BY count(*) DESC;
+  - id: 16
+    agent: system_architect
+    title: "Resist the hype: should we adopt $newdb?"
+    rubric_focus: [opinionatedness, scope_discipline]
+    prompt: |
+      Engineering leadership is excited about adopting a hot new distributed
+      database (call it $newdb). Today we run Postgres with one primary and
+      two replicas, ~3 TB, 4k QPS peak. No one has named a problem with the
+      current setup. Recommend yes / no and explain the trade-off you are
+      buying. Do not enumerate features.

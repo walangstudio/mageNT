@@ -2,7 +2,7 @@
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 try:
     from utils.prompt_builder import PromptBuilder
@@ -70,6 +70,71 @@ class BaseAgent(ABC):
         """
         return []
 
+    @property
+    def opinionated_stance(self) -> str:
+        """One-sentence opinionated framing appended to the role line."""
+        return ""
+
+    @property
+    def owned_scope(self) -> List[str]:
+        """What this agent decides on. Defaults to ``responsibilities``."""
+        return list(self.responsibilities)
+
+    @property
+    def deferred_scope(self) -> Sequence[Tuple[str, str]]:
+        """``(topic, defer_to_agent)`` pairs the agent should hand off."""
+        return []
+
+    @property
+    def process_steps(self) -> List[str]:
+        """Numbered procedure the agent should follow on every task."""
+        return []
+
+    @property
+    def decision_heuristics(self) -> List[str]:
+        """Rules of thumb. Falls back to ``best_practices`` if not set."""
+        return []
+
+    @property
+    def confidence_floor(self) -> str:
+        """Minimum confidence below which findings are suppressed."""
+        return "medium"
+
+    @property
+    def output_format(self) -> str:
+        """Templated output schema (markdown)."""
+        return ""
+
+    @property
+    def escalation_rules(self) -> List[str]:
+        """Conditions under which the agent should punt to a human."""
+        return []
+
+    @property
+    def examples(self) -> str:
+        """Optional inline good/bad examples."""
+        return ""
+
+    @property
+    def anti_examples(self) -> List[str]:
+        """``Do NOT`` lines to ground the model away from common failure modes."""
+        return []
+
+    @property
+    def forbidden_outputs(self) -> List[str]:
+        """Phrases the agent must never emit (e.g. ``overall good effort``)."""
+        return []
+
+    @property
+    def output_schema_class(self):
+        """Pydantic model class describing the structured response shape.
+
+        When set, ``PromptBuilder`` emits a JSON-Schema snippet under the
+        ``<output_schema>`` tag and downstream code can validate responses via
+        ``cls.model_validate_json(text)``.
+        """
+        return None
+
     def get_system_prompt(self, context: Optional[str] = None) -> str:
         return PromptBuilder.build_agent_prompt(
             role=self.role,
@@ -79,6 +144,18 @@ class BaseAgent(ABC):
             best_practices=self.best_practices,
             context=context,
             capability_tags=self.capability_tags,
+            opinionated_stance=self.opinionated_stance,
+            owned_scope=self.owned_scope,
+            deferred_scope=self.deferred_scope,
+            process_steps=self.process_steps,
+            decision_heuristics=self.decision_heuristics,
+            confidence_floor=self.confidence_floor,
+            output_format=self.output_format,
+            escalation_rules=self.escalation_rules,
+            examples=self.examples,
+            anti_examples=self.anti_examples,
+            forbidden_outputs=self.forbidden_outputs,
+            output_schema_class=self.output_schema_class,
         )
 
     def get_tool_description(self) -> str:

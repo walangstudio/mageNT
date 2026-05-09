@@ -1,0 +1,133 @@
+# mageNT — multi-mode dispatch map.
+#
+# For each agent/skill the installer chooses one of three delivery modes:
+#   subagent   - Claude Code subagent (~/.claude/agents/magent-<name>.md)
+#   skill      - Claude Code skill   (~/.claude/skills/magent-<name>/SKILL.md)
+#   mcp_only   - MCP tool only (current behaviour)
+#
+# `mcp_fallback: true` means the agent is also exposed as the existing
+# `consult_<name>` MCP tool, so non-Claude-Code clients still see it.
+#
+# `tools` is the Claude Code tool allow-list written into the frontmatter.
+# Audit/review subagents are read-only; only scaffolders get Edit/Write.
+
+agents:
+  # --- review / audit subagents (read-only) ---
+  security_engineer:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash]
+  qa_engineer:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash]
+  automation_qa:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash]
+  sdet:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash]
+  performance_engineer:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash]
+  debugging_expert:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash]
+  system_architect:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash]
+  delivery_manager:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash]
+  database_administrator:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash]
+  devops_engineer:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash]
+  cloud_architect:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash]
+
+  # --- advisory skills (workflow knowledge, not autonomous coders) ---
+  business_analyst:
+    mode: skill
+    mcp_fallback: true
+    tools: [Read, Grep, Glob]
+  product_manager:
+    mode: skill
+    mcp_fallback: true
+    tools: [Read, Grep, Glob]
+  ui_ux_designer:
+    mode: skill
+    mcp_fallback: true
+    tools: [Read, Grep, Glob]
+  technical_writer:
+    mode: skill
+    mcp_fallback: true
+    tools: [Read, Grep, Glob, Edit, Write]
+
+  # --- framework/language developers stay MCP-only ---
+  # They are pattern-driven personas best invoked via consult_<name>.
+  android_developer:        {mode: mcp_only}
+  api_developer:            {mode: mcp_only}
+  cli_installer_developer:  {mode: mcp_only}
+  dotnet_backend:           {mode: mcp_only}
+  flutter_developer:        {mode: mcp_only}
+  fullstack_developer:      {mode: mcp_only}
+  go_backend:               {mode: mcp_only}
+  integration_specialist:   {mode: mcp_only}
+  ios_developer:            {mode: mcp_only}
+  java_backend:             {mode: mcp_only}
+  mobile_developer:         {mode: mcp_only}
+  nextjs_developer:         {mode: mcp_only}
+  nodejs_backend:           {mode: mcp_only}
+  php_developer:            {mode: mcp_only}
+  python_backend:           {mode: mcp_only}
+  react_developer:          {mode: mcp_only}
+  react_native_developer:   {mode: mcp_only}
+  rust_backend:             {mode: mcp_only}
+  svelte_developer:         {mode: mcp_only}
+  tui_developer:            {mode: mcp_only}
+  vue_developer:            {mode: mcp_only}
+
+skills:
+  scaffold_react:    {mode: skill, tools: [Read, Write, Edit, Bash]}
+  scaffold_nextjs:   {mode: skill, tools: [Read, Write, Edit, Bash]}
+  scaffold_fastapi:  {mode: skill, tools: [Read, Write, Edit, Bash]}
+  scaffold_express:  {mode: skill, tools: [Read, Write, Edit, Bash]}
+  generate_tests:    {mode: skill, tools: [Read, Write, Edit, Grep, Glob]}
+  run_tests:         {mode: skill, tools: [Read, Bash, Grep, Glob]}
+  security_scan:     {mode: skill, tools: [Read, Grep, Glob, Bash]}
+  debug_code:        {mode: skill, tools: [Read, Grep, Glob, Bash]}
+  analyze_error:     {mode: skill, tools: [Read, Grep, Glob, Bash]}
+  check_versions:    {mode: skill, tools: [Read, Bash]}
+
+# Stateful tools that have no skill/subagent equivalent and stay MCP-only.
+mcp_only_tools:
+  - workflows
+  - specs
+  - recall
+  - run_pre_commit_hooks
+  - parallel_orchestrator
+  - code_quality_rules

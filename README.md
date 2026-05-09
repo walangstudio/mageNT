@@ -1,6 +1,6 @@
 # mageNT
 
-![version](https://img.shields.io/badge/version-0.4.0-blue)
+![version](https://img.shields.io/badge/version-0.5.0-blue)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
@@ -17,6 +17,12 @@ Ever wish Claude had deep expertise in specific areas? That's what mageNT does. 
 - Designing an API? Ask the API Developer
 
 Think of it like having 32 senior devs on standby, each with their own specialty. You can also run a full spec-driven development cycle — from requirements to parallel implementation to delivery audit — with a single tool call per step.
+
+## What's new in 0.5
+
+The prompt template was rewritten end-to-end. Each agent now ships an opinionated stance, an explicit scope/defer-to map, decision heuristics, anti-examples, and a Pydantic JSON-Schema as the response contract. Claude Code users can install agents as **subagents** + **skills** alongside (or instead of) the MCP tool path.
+
+A multi-model eval (DeepSeek v4-pro, GPT-OSS-120b, Nemotron-3-Super 120b) on 8 hard tasks shows v2 prompts win **24 / 0 / 0** pairwise vs vanilla baselines and lift parseability from **0%** to **100%**. Full report: [`tests/prompt_eval/results/report-v2c.md`](tests/prompt_eval/results/report-v2c.md).
 
 ## Quick Start
 
@@ -134,7 +140,29 @@ Register it in `~/.pi/agent/settings.json`:
       --status        Show where this server is currently installed
       --global        Write to global config (claude, cursor, gemini, codex, opencode)
       --skip-test     Skip server validation
+      --mode MODE     auto|mcp|skills|subagents|hybrid (default: auto;
+                      claude→hybrid, others→mcp)
+      --profile P     full|minimal|skills|subagents (default: full)
+      --scope S       ask|user|project (Claude Code only; default: ask)
+      --agents-dir D  Override target agents/ directory (Claude Code only)
+      --skills-dir D  Override target skills/ directory (Claude Code only)
+      --regenerate    Re-run the dispatch generator before installing
+      --dry-run       Print actions without writing
   -h, --help          Show this help
+```
+
+### Subagents + Skills (Claude Code only)
+
+On Claude Code, the default `--mode auto` resolves to **`hybrid`**: review/audit personas (security_engineer, system_architect, delivery_manager, etc.) install as native subagents under `~/.claude/agents/magent-*.md`; scaffold helpers (react, nextjs, fastapi, express) and lightweight workflow tools install as skills under `~/.claude/skills/magent-*/SKILL.md`; the MCP server stays installed as a fallback for stateful tools (workflows, specs, recall, parallel orchestration). Other clients still get the standard MCP-only install.
+
+Per-agent dispatch lives in [`config/dispatch.yaml`](config/dispatch.yaml). Markdown is generated from the Python agent classes by [`tools/generate_dispatch.py`](tools/generate_dispatch.py); a SHA-tracked manifest at `~/.claude/.magent-manifest.json` lets `--upgrade` and `--uninstall` skip files you've edited by hand.
+
+```bash
+./install.sh -c claude                       # auto → hybrid (subagents + skills + MCP fallback)
+./install.sh -c claude --mode mcp            # force MCP-only on Claude Code
+./install.sh -c claude --scope project       # write to <workspace>/.claude/ instead of ~/.claude/
+./install.sh -c claude --regenerate          # re-render markdown before install
+./install.sh -c claude --dry-run             # preview actions without writing
 ```
 
 ### Checking install status
@@ -170,13 +198,9 @@ pip install -r requirements.txt
 python server.py  # test it works, then Ctrl+C
 ```
 
-Now add mageNT to your MCP client config (use absolute paths):
+Now add mageNT to your MCP client config (use absolute paths).
 
-### Claude Desktop
-
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Linux:** `~/.config/Claude/claude_desktop_config.json`
+Most clients use the same `mcpServers` JSON — add this block to the config file for your client:
 
 ```json
 {
@@ -189,158 +213,29 @@ Now add mageNT to your MCP client config (use absolute paths):
 }
 ```
 
-On Windows: `"command": "C:\\path\\to\\mageNT\\.venv\\Scripts\\python.exe"`
+| Client | Config file |
+|--------|-------------|
+| Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json` (Win) · `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) · `~/.config/Claude/claude_desktop_config.json` (Linux) |
+| Claude Code | `.mcp.json` (workspace) or `~/.claude.json` (global) |
+| Cursor | `.cursor/mcp.json` (workspace) or `~/.cursor/mcp.json` (global) |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Gemini CLI | `.gemini/settings.json` (workspace) or `~/.gemini/settings.json` (global) |
+| Kilo Code | `.kilocode/mcp.json` |
 
-### Claude Code
-
-Workspace-local (`.mcp.json` in your project root):
-```json
-{
-  "mcpServers": {
-    "magent": {
-      "command": "/absolute/path/to/mageNT/.venv/bin/python",
-      "args": ["/absolute/path/to/mageNT/server.py"]
-    }
-  }
-}
-```
-
-Global user scope:
+**Claude Code global (CLI):**
 ```bash
 claude mcp add --scope user magent -- /absolute/path/to/mageNT/.venv/bin/python /absolute/path/to/mageNT/server.py
 ```
 
-### Cursor
+**Clients with different config format** — use the same `command`/`args` values, different structure:
 
-`.cursor/mcp.json` (workspace) or `~/.cursor/mcp.json` (global):
-```json
-{
-  "mcpServers": {
-    "magent": {
-      "command": "/absolute/path/to/mageNT/.venv/bin/python",
-      "args": ["/absolute/path/to/mageNT/server.py"]
-    }
-  }
-}
-```
-
-### Windsurf
-
-`~/.codeium/windsurf/mcp_config.json`:
-```json
-{
-  "mcpServers": {
-    "magent": {
-      "command": "/absolute/path/to/mageNT/.venv/bin/python",
-      "args": ["/absolute/path/to/mageNT/server.py"]
-    }
-  }
-}
-```
-
-### VS Code
-
-`.vscode/mcp.json` in your workspace root (note: VS Code uses `servers`, not `mcpServers`):
-```json
-{
-  "servers": {
-    "magent": {
-      "type": "stdio",
-      "command": "/absolute/path/to/mageNT/.venv/bin/python",
-      "args": ["/absolute/path/to/mageNT/server.py"]
-    }
-  }
-}
-```
-
-For user-level config, add via VS Code Settings UI under `mcp.servers`.
-
-### Gemini CLI
-
-`.gemini/settings.json` (workspace) or `~/.gemini/settings.json` (global):
-```json
-{
-  "mcpServers": {
-    "magent": {
-      "command": "/absolute/path/to/mageNT/.venv/bin/python",
-      "args": ["/absolute/path/to/mageNT/server.py"]
-    }
-  }
-}
-```
-
-### OpenAI Codex CLI
-
-`.codex/config.toml` (workspace) or `~/.codex/config.toml` (global):
-```toml
-[mcp_servers.magent]
-command = "/absolute/path/to/mageNT/.venv/bin/python /absolute/path/to/mageNT/server.py"
-startup_timeout_sec = 30
-tool_timeout_sec = 300
-enabled = true
-```
-
-### Zed
-
-`~/.config/zed/settings.json`:
-```json
-{
-  "context_servers": {
-    "magent": {
-      "command": {
-        "path": "/absolute/path/to/mageNT/.venv/bin/python",
-        "args": ["/absolute/path/to/mageNT/server.py"],
-        "env": {}
-      }
-    }
-  }
-}
-```
-
-### Kilo Code
-
-`.kilocode/mcp.json` in your workspace root:
-```json
-{
-  "mcpServers": {
-    "magent": {
-      "command": "/absolute/path/to/mageNT/.venv/bin/python",
-      "args": ["/absolute/path/to/mageNT/server.py"]
-    }
-  }
-}
-```
-
-### OpenCode
-
-`opencode.json` (workspace) or `~/.config/opencode/opencode.json` (global):
-```json
-{
-  "mcp": {
-    "magent": {
-      "command": "/absolute/path/to/mageNT/.venv/bin/python",
-      "args": ["/absolute/path/to/mageNT/server.py"]
-    }
-  }
-}
-```
-
-### Goose
-
-`~/.config/goose/config.yaml`:
-```yaml
-extensions:
-  magent:
-    type: stdio
-    cmd: /absolute/path/to/mageNT/.venv/bin/python
-    args:
-      - /absolute/path/to/mageNT/server.py
-    enabled: true
-```
-
-### pi.dev
-
-pi.dev does not support MCP servers natively. It uses TypeScript extensions instead. See the existing pi.dev bridge example in the **Supported MCP Clients** section above.
+| Client | Config file | Key difference |
+|--------|-------------|----------------|
+| VS Code | `.vscode/mcp.json` | Top-level key is `servers` (not `mcpServers`), add `"type": "stdio"` |
+| Zed | `~/.config/zed/settings.json` | Top-level key is `context_servers`, command is nested: `{ "path": ..., "args": ..., "env": {} }` |
+| OpenAI Codex | `.codex/config.toml` | TOML format: `[mcp_servers.magent]`, `command = "/path/to/.venv/bin/python /path/to/server.py"` |
+| OpenCode | `opencode.json` or `~/.config/opencode/opencode.json` | Top-level key is `mcp` (not `mcpServers`) |
+| Goose | `~/.config/goose/config.yaml` | YAML format: under `extensions`, uses `cmd`/`args`/`type: stdio`/`enabled: true` |
 
 On Windows, use `C:\absolute\path\to\mageNT\.venv\Scripts\python.exe` for the command. Restart the client after editing any config.
 
@@ -470,6 +365,43 @@ agents:
     specialization: "React 18, TypeScript, Tailwind"
 ```
 
+## Prompt Template (v2)
+
+Each agent's system prompt is assembled by [`utils/prompt_builder.py`](utils/prompt_builder.py) from typed fields on the agent class. The structure (top to bottom):
+
+- `<role>` — XML-tagged for prompt-cache stability; opens with the opinionated stance.
+- `Filters:` — single-line shared rule set (deduped from per-agent boilerplate).
+- `Domain:` — one-line capability hint derived from `capability_tags`.
+- `## Scope` — `Own:` and `Defer:` lists. Out-of-scope requests must name the right specialist by name.
+- `## Process` — numbered procedure.
+- `## Heuristics` — decision rules.
+- `## Output` — prose template OR a compact JSON-Schema snippet derived from the agent's `output_schema_class` (a Pydantic model).
+- `## Escalation` — stop conditions.
+- `## Anti-patterns` — `Do NOT ...` lines and a `Never emit:` phrase list.
+
+Pydantic schemas live in [`agents/schemas.py`](agents/schemas.py): `SecurityReport`, `ADR`, `ReleaseAudit`, `DebugReport`, `PerfHypothesisReport`, `IndexAuditReport`, `TestPlan`. Adding `output_schema_class` to a new agent makes its responses parser-validatable end-to-end.
+
+## Eval Harness
+
+[`tests/prompt_eval/`](tests/prompt_eval/) compares prompt variants on a fixed task suite. The harness scores each response on a 7-dimension rubric (opinionatedness, scope_discipline, output_structure, conciseness, actionability, **parseability**, **template_adherence**) judged by a configurable LLM, and validates every response against the agent's Pydantic schema.
+
+```bash
+# OpenAI-compatible endpoint (e.g. NVIDIA NIM); runs the matrix and writes results JSON.
+python tests/prompt_eval/run_matrix.py \
+  --models openai/gpt-oss-120b deepseek-ai/deepseek-v4-pro \
+  --tasks 9 10 11 12 13 14 15 16 \
+  --conditions new baseline \
+  --validate-schema \
+  --out tests/prompt_eval/results/matrix.json
+
+# Combine result files into a side-by-side markdown report.
+python tests/prompt_eval/build_report.py \
+  --inputs tests/prompt_eval/results/matrix.json \
+  --out tests/prompt_eval/results/report.md
+```
+
+Latest hard-task report: [`results/report-v2c.md`](tests/prompt_eval/results/report-v2c.md). v2 magent prompts hit **24/24 pairwise wins** and **100% parseable** vs **0% parseable** for vanilla baselines.
+
 ## Workflows
 
 Pre-built workflows coordinate multiple agents:
@@ -534,18 +466,25 @@ pip install -r requirements.txt
 
 ```
 mageNT/
-├── server.py           # MCP server
-├── config.yaml         # Your settings
-├── install.sh          # Automated installer (Linux/macOS/Git Bash)
-├── install.bat         # Automated installer (Windows CMD/PowerShell)
-├── agents/             # The 33 agents
-├── skills/             # Reusable skills (scaffold, test, debug, security, etc.)
-├── rules/              # Code quality rules
-├── hooks/              # Automation hooks
-├── workflows/          # Multi-agent workflow templates
-├── specs/              # Spec-driven development output (created at runtime)
-├── utils/              # Orchestration, spec store, skill registry, prompt builders
-└── tests/              # Tests
+├── server.py                    # MCP server
+├── config.yaml                  # Your settings
+├── install.sh / install.bat     # Automated installers
+├── agents/                      # The 33 agents
+│   └── schemas.py               # Pydantic response schemas (SecurityReport, ADR, etc.)
+├── skills/                      # Reusable skills (scaffold, test, debug, security, etc.)
+├── rules/                       # Code quality rules
+├── hooks/                       # Automation hooks
+├── workflows/                   # Multi-agent workflow templates
+├── specs/                       # Spec-driven development output (created at runtime)
+├── config/
+│   └── dispatch.yaml            # Per-agent install mode (subagent / skill / mcp_only)
+├── tools/
+│   ├── generate_dispatch.py     # Renders subagent + skill markdown from agent classes
+│   └── dispatch_manifest.py     # SHA-tracked manifest for safe upgrade/uninstall
+├── utils/                       # Orchestration, spec store, skill registry, prompt builders
+└── tests/
+    ├── test_hooks.py / test_rules.py
+    └── prompt_eval/             # Multi-model eval harness (run_matrix.py, build_report.py)
 ```
 
 ## Testing

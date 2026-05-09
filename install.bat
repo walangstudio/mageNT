@@ -16,6 +16,13 @@ set "SKIP_TEST=false"
 set "GLOBAL_CONFIG=false"
 set "CLIENT_EXPLICIT=false"
 set "STATUS=false"
+set "MODE=auto"
+set "PROFILE=full"
+set "SCOPE=ask"
+set "AGENTS_DIR="
+set "SKILLS_DIR="
+set "REGENERATE=false"
+set "DRY_RUN=false"
 
 goto :parse_args
 
@@ -35,6 +42,13 @@ echo       --status        Show where this server is currently installed
 echo       --global        Write to global config path (claude, cursor, gemini,
 echo                       codex, opencode, all)
 echo       --skip-test     Skip test_server.py validation
+echo       --mode MODE     auto^|mcp^|skills^|subagents^|hybrid (default: auto)
+echo       --profile P     full^|minimal^|skills^|subagents (default: full)
+echo       --scope S       ask^|user^|project (Claude Code; default: ask)
+echo       --agents-dir D  Override target agents/ directory (Claude Code)
+echo       --skills-dir D  Override target skills/ directory (Claude Code)
+echo       --regenerate    Re-run the dispatch generator before installing
+echo       --dry-run       Print actions without writing
 echo   -h, --help          Show this help
 echo.
 echo Examples:
@@ -77,6 +91,13 @@ if /i "%~1"=="--global"    goto :pf_global
 if /i "%~1"=="--skip-test" goto :pf_skip_test
 if /i "%~1"=="-c"          goto :pf_client
 if /i "%~1"=="--client"    goto :pf_client
+if /i "%~1"=="--mode"        goto :pf_mode
+if /i "%~1"=="--profile"     goto :pf_profile
+if /i "%~1"=="--scope"       goto :pf_scope
+if /i "%~1"=="--agents-dir"  goto :pf_agents_dir
+if /i "%~1"=="--skills-dir"  goto :pf_skills_dir
+if /i "%~1"=="--regenerate"  goto :pf_regenerate
+if /i "%~1"=="--dry-run"     goto :pf_dry_run
 echo Unknown option: %~1
 goto :show_help
 
@@ -112,6 +133,44 @@ if "%~2"=="" (
 set "CLIENT=%~2"
 set "CLIENT_EXPLICIT=true"
 shift
+shift
+goto :parse_args
+:pf_mode
+if "%~2"=="" ( echo   ERROR: --mode requires a value >&2 & exit /b 1 )
+set "MODE=%~2"
+shift
+shift
+goto :parse_args
+:pf_profile
+if "%~2"=="" ( echo   ERROR: --profile requires a value >&2 & exit /b 1 )
+set "PROFILE=%~2"
+shift
+shift
+goto :parse_args
+:pf_scope
+if "%~2"=="" ( echo   ERROR: --scope requires a value >&2 & exit /b 1 )
+set "SCOPE=%~2"
+shift
+shift
+goto :parse_args
+:pf_agents_dir
+if "%~2"=="" ( echo   ERROR: --agents-dir requires a value >&2 & exit /b 1 )
+set "AGENTS_DIR=%~2"
+shift
+shift
+goto :parse_args
+:pf_skills_dir
+if "%~2"=="" ( echo   ERROR: --skills-dir requires a value >&2 & exit /b 1 )
+set "SKILLS_DIR=%~2"
+shift
+shift
+goto :parse_args
+:pf_regenerate
+set "REGENERATE=true"
+shift
+goto :parse_args
+:pf_dry_run
+set "DRY_RUN=true"
 shift
 goto :parse_args
 
@@ -524,6 +583,18 @@ if "!VENV_PYTHON!"=="" (
 
 call :configure_client "!CLIENT!" "!VENV_PYTHON!" ""
 
+if /i "!CLIENT!"=="claude" goto :uninstall_dispatch
+if /i "!CLIENT!"=="all" goto :uninstall_dispatch
+goto :skip_uninstall_dispatch
+:uninstall_dispatch
+for %%C in ("!USERPROFILE!\.claude" "!CD!\.claude") do (
+    if exist "%%~C\.magent-manifest.json" (
+        echo   Removing managed subagents/skills from %%~C
+        call :run_dispatch_generator "%%~C" uninstall "!VENV_PYTHON!"
+    )
+)
+:skip_uninstall_dispatch
+
 del /f /q "!MAGENT_DIR!\!MARKER_FILE!" 2>nul
 echo   Removed version marker
 
@@ -710,10 +781,36 @@ if not "!SKIP_TEST!"=="true" (
 )
 
 rem 6. Configure MCP client
-echo   Configuring MCP client...
+call :resolve_mode
 set "SERVER_PY=!MAGENT_DIR!\server.py"
-call :configure_client "!CLIENT!" "!VENV_PYTHON!" "!SERVER_PY!"
+if /i "!RESOLVED_MODE!"=="mcp" (
+    echo   Configuring MCP client...
+    call :configure_client "!CLIENT!" "!VENV_PYTHON!" "!SERVER_PY!"
+    echo.
+) else if /i "!RESOLVED_MODE!"=="hybrid" (
+    echo   Configuring MCP client...
+    call :configure_client "!CLIENT!" "!VENV_PYTHON!" "!SERVER_PY!"
+    echo.
+) else (
+    echo   Skipping MCP install ^(mode=!RESOLVED_MODE!^)
+    echo.
+)
+
+rem 6b. Install subagents / skills if applicable
+if /i "!RESOLVED_MODE!"=="hybrid" goto :do_dispatch_install
+if /i "!RESOLVED_MODE!"=="skills" goto :do_dispatch_install
+if /i "!RESOLVED_MODE!"=="subagents" goto :do_dispatch_install
+goto :skip_dispatch_install
+:do_dispatch_install
+if /i not "!CLIENT!"=="claude" (
+    echo   mode=!RESOLVED_MODE! requires -c claude; skipping subagent/skill install.
+    goto :skip_dispatch_install
+)
+call :resolve_dispatch_target
+echo   Installing subagents/skills into !DISPATCH_TARGET! ^(profile=!PROFILE!^)
+call :run_dispatch_generator "!DISPATCH_TARGET!" generate "!VENV_PYTHON!"
 echo.
+:skip_dispatch_install
 
 rem 7. Write marker
 echo !VERSION!> "!MAGENT_DIR!\!MARKER_FILE!"
@@ -766,6 +863,63 @@ if exist "!MAGENT_DIR!\.venv\Scripts\python.exe" (
     set "VENV_PYTHON=!MAGENT_DIR!\.venv\Scripts\python.exe"
 ) else if exist "!MAGENT_DIR!\.venv\bin\python.exe" (
     set "VENV_PYTHON=!MAGENT_DIR!\.venv\bin\python.exe"
+)
+goto :eof
+
+rem ════════════════════════════════════════════════════════
+:resolve_mode
+if /i not "!MODE!"=="auto" (
+    set "RESOLVED_MODE=!MODE!"
+    goto :eof
+)
+if /i "!CLIENT!"=="claude" (
+    set "RESOLVED_MODE=hybrid"
+) else (
+    set "RESOLVED_MODE=mcp"
+)
+goto :eof
+
+rem ════════════════════════════════════════════════════════
+:resolve_dispatch_target
+if not "!AGENTS_DIR!"=="" (
+    set "DISPATCH_TARGET=!AGENTS_DIR!"
+    goto :eof
+)
+if /i "!SCOPE!"=="user" (
+    set "DISPATCH_TARGET=!USERPROFILE!\.claude"
+    goto :eof
+)
+if /i "!SCOPE!"=="project" (
+    set "DISPATCH_TARGET=!CD!\.claude"
+    goto :eof
+)
+rem SCOPE=ask
+if /i "!FORCE!"=="true" (
+    set "DISPATCH_TARGET=!USERPROFILE!\.claude"
+    goto :eof
+)
+set /p "_scope=  Install for all projects (~\.claude) or just this one (.claude)? [A/p] "
+if /i "!_scope!"=="P" (
+    set "DISPATCH_TARGET=!CD!\.claude"
+) else (
+    set "DISPATCH_TARGET=!USERPROFILE!\.claude"
+)
+goto :eof
+
+rem ════════════════════════════════════════════════════════
+:run_dispatch_generator
+set "_target=%~1"
+set "_action=%~2"
+set "_pyexe=%~3"
+set "_extra="
+if /i "!DRY_RUN!"=="true" set "_extra=!_extra! --dry-run"
+if /i "!FORCE!"=="true"   set "_extra=!_extra! --force"
+if /i "!PROFILE!"=="subagents" set "_extra=!_extra! --profile subagents"
+if /i "!PROFILE!"=="skills"    set "_extra=!_extra! --profile skills"
+if /i "!_action!"=="uninstall" (
+    "!_pyexe!" "!MAGENT_DIR!\tools\generate_dispatch.py" --target "!_target!" --uninstall !_extra!
+) else (
+    "!_pyexe!" "!MAGENT_DIR!\tools\generate_dispatch.py" --target "!_target!" !_extra!
 )
 goto :eof
 
