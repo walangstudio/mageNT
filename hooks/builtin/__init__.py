@@ -13,6 +13,7 @@ from .automation import (
     AutoFormatHook,
     AutoTestHook,
 )
+from .spec_commit_hook import FRIdCommitTagHook
 
 # All built-in hooks
 BUILTIN_HOOKS = [
@@ -23,6 +24,7 @@ BUILTIN_HOOKS = [
     LogSessionHook,
     AutoFormatHook,
     AutoTestHook,
+    FRIdCommitTagHook,
 ]
 
 __all__ = [
@@ -34,4 +36,5 @@ __all__ = [
     "LogSessionHook",
     "AutoFormatHook",
     "AutoTestHook",
+    "FRIdCommitTagHook",
 ]

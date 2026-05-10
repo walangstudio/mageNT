@@ -1,4 +1,4 @@
-default_provider: passthrough   # passthrough | anthropic | ollama | <any key in providers>
+default_provider: passthrough   # passthrough | anthropic | ollama | lms | nvidia | <any key in providers>
 
 providers:
   anthropic:
@@ -8,6 +8,18 @@ providers:
   ollama:
     default_model: llama3.1
     base_url: http://localhost:11434
+
+  lms:
+    type: openai_compatible
+    default_model: openai/gpt-oss-20b
+    base_url: http://localhost:1234/v1
+    # No api_key needed for local LM Studio.
+
+  nvidia:
+    type: openai_compatible
+    default_model: openai/gpt-oss-120b
+    base_url: https://integrate.api.nvidia.com/v1
+    # api_key: nvapi-...   (use NVIDIA_API_KEY env var)
 
   # openai:
   #   type: openai_compatible
@@ -24,14 +36,19 @@ providers:
   #   default_model: openai/gpt-4o
   #   base_url: https://openrouter.ai/api/v1
 
-  # lmstudio:
-  #   type: openai_compatible
-  #   default_model: loaded-model-name
-  #   base_url: http://localhost:1234/v1
-
+# Per-agent provider overrides. Empty by default — every agent uses
+# `default_provider` above. Uncomment + customise to route specific spec-
+# pipeline phases to specific providers. Example for an LM-Studio + NIM mix:
+#
+# agent_providers:
+#   delivery_manager:        lms       # local for cheap planning phases
+#   system_architect:        nvidia    # frontier model for architecture
+#   business_analyst:        lms
+#   sdet:                    nvidia    # frontier for test design
+#   fullstack_developer:     nvidia    # frontier for actual code
+#
+# Set MAGENT_INSECURE_SSL=1 if Avast/proxy MITM-intercepts HTTPS.
 agent_providers: {}
-#   system_architect: anthropic
-#   security_engineer: anthropic
 
 model_per_agent: {}
 #   system_architect: claude-opus-4-6

@@ -657,7 +657,11 @@ if "!VENV_PYTHON!"=="" (
 
 rem 1. Upgrade dependencies
 echo   Upgrading dependencies...
-"!VENV_PYTHON!" -m pip install -r "!MAGENT_DIR!\requirements.txt" --upgrade --quiet >nul 2>&1
+"!VENV_PYTHON!" -m pip install -r "!MAGENT_DIR!\requirements.txt" --upgrade --quiet
+if errorlevel 1 (
+    echo   ERROR: pip upgrade failed -- see output above. >&2
+    exit /b 1
+)
 echo   OK: Dependencies upgraded
 echo.
 
@@ -752,7 +756,16 @@ echo.
 
 rem 3. Install deps
 echo   Installing dependencies...
-"!VENV_PYTHON!" -m pip install -r "!MAGENT_DIR!\requirements.txt" --quiet 2>nul
+"!VENV_PYTHON!" -m pip install -r "!MAGENT_DIR!\requirements.txt" --quiet
+if errorlevel 1 (
+    echo   ERROR: pip install failed -- see output above. >&2
+    echo. >&2
+    echo   Hint: if you see "cannot open input file 'python3.12.lib'" your >&2
+    echo   .venv was created by MSYS2 / UCRT64 Python, which cannot link >&2
+    echo   Rust-built wheels. Delete .venv and re-run with a regular Windows >&2
+    echo   Python ^(python.org / Microsoft Store^):  rmdir /s /q .venv  ^&^&  install.bat >&2
+    exit /b 1
+)
 echo   OK: Dependencies installed
 echo.
 
@@ -858,11 +871,17 @@ goto :eof
 
 rem ════════════════════════════════════════════════════════
 :find_venv_python
+rem MSYS2 / UCRT64-built venvs ship only python3.exe under bin/, no python.exe.
+rem Standard Windows venvs use Scripts/python.exe. Check every common layout.
 set "VENV_PYTHON="
-if exist "!MAGENT_DIR!\.venv\Scripts\python.exe" (
-    set "VENV_PYTHON=!MAGENT_DIR!\.venv\Scripts\python.exe"
-) else if exist "!MAGENT_DIR!\.venv\bin\python.exe" (
-    set "VENV_PYTHON=!MAGENT_DIR!\.venv\bin\python.exe"
+for %%P in (
+    "!MAGENT_DIR!\.venv\Scripts\python.exe"
+    "!MAGENT_DIR!\.venv\Scripts\python3.exe"
+    "!MAGENT_DIR!\.venv\bin\python.exe"
+    "!MAGENT_DIR!\.venv\bin\python3.exe"
+    "!MAGENT_DIR!\.venv\bin\python"
+) do (
+    if "!VENV_PYTHON!"=="" if exist %%~P set "VENV_PYTHON=%%~P"
 )
 goto :eof
 

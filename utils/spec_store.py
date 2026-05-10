@@ -180,3 +180,87 @@ status: draft
         slug = _slugify(project_name)
         suffix = uuid.uuid4().hex[:8]
         return f"{slug}-{suffix}"
+
+    # ---------- Phase 7: typed artifact storage --------------------------------
+    #
+    # Maps SPEC_SCHEMAS kind → on-disk filename. Mirrors
+    # tools/validate_spec.ARTIFACT_FILES (kept in sync there).
+
+    _ARTIFACT_FILES = {
+        "constitution":         "constitution.json",
+        "feature_spec":         "spec.json",
+        "clarification_log":    "clarifications.json",
+        "plan":                 "plan.json",
+        "tasks":                "tasks.json",
+        "implementation_trace": "implementation_trace.json",
+        "audit":                "audit.json",
+    }
+
+    def save_artifact(self, spec_id: str, kind: str, model: Any) -> Path:
+        """Persist a Pydantic spec_schemas model under specs/<id>/<file>.json."""
+        if kind not in self._ARTIFACT_FILES and kind != "spec_delta":
+            raise ValueError(f"Unknown artifact kind: {kind!r}")
+        spec_dir = self._spec_dir(spec_id)
+        spec_dir.mkdir(parents=True, exist_ok=True)
+        if kind == "spec_delta":
+            deltas_dir = spec_dir / "deltas"
+            deltas_dir.mkdir(exist_ok=True)
+            base = getattr(model, "base_version", "unknown")
+            path = deltas_dir / f"{base}.json"
+        else:
+            path = spec_dir / self._ARTIFACT_FILES[kind]
+        path.write_text(model.model_dump_json(indent=2), encoding="utf-8")
+        return path
+
+    def load_artifact(self, spec_id: str, kind: str) -> Optional[Any]:
+        """Load + validate a previously persisted artifact, or ``None`` if absent."""
+        try:
+            from agents.spec_schemas import SPEC_SCHEMAS  # local import: avoid cycle
+        except ImportError:
+            from ..agents.spec_schemas import SPEC_SCHEMAS  # type: ignore
+        if kind not in SPEC_SCHEMAS:
+            raise ValueError(f"Unknown artifact kind: {kind!r}")
+        if kind == "spec_delta":
+            raise ValueError("Use load_deltas() to load delta files.")
+        path = self._spec_dir(spec_id) / self._ARTIFACT_FILES[kind]
+        if not path.exists():
+            return None
+        return SPEC_SCHEMAS[kind].model_validate_json(path.read_text(encoding="utf-8"))
+
+    def load_deltas(self, spec_id: str) -> List[Any]:
+        """Return all SpecDelta records (empty list if no deltas/ dir)."""
+        try:
+            from agents.spec_schemas import SpecDelta
+        except ImportError:
+            from ..agents.spec_schemas import SpecDelta  # type: ignore
+        deltas_dir = self._spec_dir(spec_id) / "deltas"
+        if not deltas_dir.is_dir():
+            return []
+        out = []
+        for path in sorted(deltas_dir.glob("*.json")):
+            out.append(SpecDelta.model_validate_json(path.read_text(encoding="utf-8")))
+        return out
+
+    def write_failing_test(self, spec_id: str, relpath: str, content: str) -> Path:
+        """Write a sdet-generated failing test under specs/<id>/<relpath>."""
+        spec_dir = self._spec_dir(spec_id)
+        path = spec_dir / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def record_phase_cost(self, spec_id: str, phase: str, usage: Dict[str, Any]) -> Path:
+        """Append per-phase token / cost record to specs/<id>/cost.json."""
+        spec_dir = self._spec_dir(spec_id)
+        spec_dir.mkdir(parents=True, exist_ok=True)
+        path = spec_dir / "cost.json"
+        existing = {}
+        if path.exists():
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                existing = {}
+        bucket = existing.setdefault(phase, [])
+        bucket.append(usage)
+        path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+        return path
