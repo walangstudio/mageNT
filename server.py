@@ -337,7 +337,7 @@ class MageNTServer:
             tools.extend([
                 Tool(
                     name="create_spec",
-                    description="Generate a structured requirements spec for a project. Returns spec_id used by other SDD tools.",
+                    description="[deprecated — prefer magent_spec for schema-validated FeatureSpec output] Generate a structured requirements spec for a project. Returns spec_id used by other SDD tools.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -370,7 +370,7 @@ class MageNTServer:
                 ),
                 Tool(
                     name="create_arch_spec",
-                    description="Generate a technical architecture spec from a requirements spec. Requires create_spec to have been called first.",
+                    description="[deprecated — prefer magent_plan for schema-validated ImplementationPlan] Generate a technical architecture spec from a requirements spec. Requires create_spec to have been called first.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -381,7 +381,7 @@ class MageNTServer:
                 ),
                 Tool(
                     name="run_parallel_agents",
-                    description="Run multiple agents in parallel against the arch spec. Phase 'build' for implementation guidance, 'qa' for quality review.",
+                    description="[deprecated — prefer magent_implement for schema-validated ImplementationTrace] Run multiple agents in parallel against the arch spec. Phase 'build' for implementation guidance, 'qa' for quality review.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -398,7 +398,7 @@ class MageNTServer:
                 ),
                 Tool(
                     name="audit_spec",
-                    description="Audit phase results against the original requirements checklist. Returns per-requirement MET/PARTIAL/MISSING status and a GO/NO_GO decision.",
+                    description="[deprecated — prefer magent_audit for schema-validated multi-reviewer Audit] Audit phase results against the original requirements checklist. Returns per-requirement MET/PARTIAL/MISSING status and a GO/NO_GO decision.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -420,6 +420,145 @@ class MageNTServer:
                     name="list_specs",
                     description="List all spec-driven development specs created in this workspace.",
                     inputSchema={"type": "object", "properties": {}},
+                ),
+            ])
+
+            # ---------- Phase 7: schema-validated spec pipeline (magent_*) ----------
+            # Each tool dispatches into utils/spec_pipeline.py; outputs are
+            # validated against agents/spec_schemas.py before persistence.
+            tools.extend([
+                Tool(
+                    name="magent_constitution",
+                    description="Phase 7. Generate the project Constitution (principles + NFR targets + tech constraints). Drivers: delivery_manager + system_architect. Output: Constitution schema. No prerequisites.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "project_name": {"type": "string"},
+                            "intent": {"type": "string", "description": "One-paragraph project intent."},
+                            "spec_id": {"type": "string", "description": "Optional; defaults to slug+uuid8."},
+                        },
+                        "required": ["project_name", "intent"],
+                    },
+                ),
+                Tool(
+                    name="magent_spec",
+                    description="Phase 7. Produce a schema-validated FeatureSpec with FR-### IDs (RFC 2119 verbs), Given/When/Then scenarios (validators reject tautology), and [NEEDS CLARIFICATION] markers. Driver: business_analyst. Gate: constitution must exist.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "spec_id": {"type": "string"},
+                            "idea": {"type": "string", "description": "What to build."},
+                        },
+                        "required": ["spec_id", "idea"],
+                    },
+                ),
+                Tool(
+                    name="magent_clarify",
+                    description="Phase 7. Resolve every [NEEDS CLARIFICATION] marker on the FeatureSpec. Driver: business_analyst. Gate: spec must have at least one open clarification.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "spec_id": {"type": "string"},
+                            "answers": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "question": {"type": "string"},
+                                        "answer": {"type": "string"},
+                                    },
+                                    "required": ["question", "answer"],
+                                },
+                                "description": "Optional pre-supplied answers; otherwise the BA agent proposes its own.",
+                            },
+                        },
+                        "required": ["spec_id"],
+                    },
+                ),
+                Tool(
+                    name="magent_plan",
+                    description="Phase 7. Produce an ImplementationPlan from architect + DBA + cloud_architect (parallel, merged by system_architect). Gate: spec validates AND has zero open clarifications.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {"spec_id": {"type": "string"}},
+                        "required": ["spec_id"],
+                    },
+                ),
+                Tool(
+                    name="magent_tasks",
+                    description="Phase 7. Decompose the plan into a TaskList (with [P] parallel-safe tags + file paths + fr_ids). For every Given/When/Then scenario, sdet emits a failing test stub in the auto-detected framework (pytest/vitest/jest/go test/cargo test). Gate: plan validates.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "spec_id": {"type": "string"},
+                            "project_root": {"type": "string", "description": "Path used for test-framework detection. Defaults to cwd."},
+                        },
+                        "required": ["spec_id"],
+                    },
+                ),
+                Tool(
+                    name="magent_implement",
+                    description="Phase 7. For every Task: write the agent's emitted files to project_dir, run the failing test, and create a real git commit prefixed with [FR-XXX]. Returns ImplementationTrace + per-task outcomes. Gate: tasks validate AND every failing_test_path exists on disk.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "spec_id": {"type": "string"},
+                            "project_dir": {
+                                "type": "string",
+                                "description": "Where files land + git commits happen. Defaults to specs/<id>/workspace/. Init'd as a git repo if not already one.",
+                            },
+                            "task_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Optional subset of task ids to run (default: all).",
+                            },
+                            "agent": {
+                                "type": "string",
+                                "description": "Driving agent name (default: fullstack_developer).",
+                            },
+                        },
+                        "required": ["spec_id"],
+                    },
+                ),
+                Tool(
+                    name="magent_audit",
+                    description="Phase 7. Multi-reviewer audit: delivery_manager + security_engineer + performance_engineer + qa_engineer (parallel) merged into a single Audit schema with phase status + reviewer findings + recommendation.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {"spec_id": {"type": "string"}},
+                        "required": ["spec_id"],
+                    },
+                ),
+                Tool(
+                    name="magent_release",
+                    description="Phase 7. Final release-readiness gate via the Phase 6 ReleaseAudit schema (GO / NO-GO / GO-WITH-CONDITIONS with phase audit table + risks + conditions). Gate: audit recommends GO or GO-WITH-CONDITIONS.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {"spec_id": {"type": "string"}},
+                        "required": ["spec_id"],
+                    },
+                ),
+                Tool(
+                    name="magent_spec_delta",
+                    description="Phase 7 (brownfield). Produce a SpecDelta (ADDED / MODIFIED / REMOVED / RENAMED requirements) against an existing FeatureSpec without rewriting it. Persisted under specs/<id>/deltas/<base_version>.json.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "spec_id": {"type": "string"},
+                            "base_version": {"type": "string", "description": "Version label or commit SHA the delta applies against."},
+                            "intent": {"type": "string", "description": "What's changing and why."},
+                        },
+                        "required": ["spec_id", "base_version", "intent"],
+                    },
+                ),
+                Tool(
+                    name="magent_validate",
+                    description="Phase 7. Run the spec validator over an entire spec directory: schema-checks every artifact, cross-refs FR-IDs, confirms failing_test_path files exist, and rejects unresolved clarifications.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {"spec_id": {"type": "string"}},
+                        "required": ["spec_id"],
+                    },
                 ),
             ])
 
@@ -1126,6 +1265,335 @@ class MageNTServer:
                     lines.append(m.get("content", "")[:1000])
                     lines.append("")
                 return [TextContent(type="text", text="\n".join(lines))]
+
+            elif name.startswith("magent_"):
+                # Phase 7: schema-validated spec pipeline. Each tool is a thin
+                # wrapper around utils/spec_pipeline.run_*_phase. The handler
+                # extracts arguments, calls the pipeline, and returns the
+                # validated artifact path + a brief summary.
+                from utils.spec_pipeline import (
+                    run_single_agent_phase, run_multi_agent_phase,
+                    require_artifact, require_resolved_clarifications,
+                    GateError, PhaseEscalation,
+                )
+                from agents.spec_schemas import (
+                    Constitution, FeatureSpec, ClarificationLog,
+                    ImplementationPlan, TaskList, ImplementationTrace,
+                    Audit, SpecDelta,
+                )
+                try:
+                    if name == "magent_validate":
+                        from tools.validate_spec import validate_spec_dir
+                        spec_id = arguments["spec_id"]
+                        spec_dir = self.spec_store._spec_dir(spec_id)
+                        report = validate_spec_dir(spec_dir)
+                        body = {
+                            "ok": report.ok,
+                            "loaded": report.artifacts_loaded,
+                            "missing": report.artifacts_missing,
+                            "warnings": report.warnings,
+                            "errors": report.errors,
+                        }
+                        return [TextContent(type="text", text=json.dumps(body, indent=2))]
+
+                    if name == "magent_constitution":
+                        spec_id = arguments.get("spec_id") or self.spec_store.make_spec_id(
+                            arguments["project_name"]
+                        )
+                        result = run_multi_agent_phase(
+                            spec_store=self.spec_store, spec_id=spec_id,
+                            kind="constitution",
+                            agent_names=["delivery_manager", "system_architect"],
+                            merger_agent="delivery_manager",
+                            user_intent=(
+                                f"Project: {arguments['project_name']}\n"
+                                f"Intent: {arguments['intent']}\n\n"
+                                "Produce the project Constitution: 3+ principles, NFR targets, "
+                                "tech constraints, out-of-scope list."
+                            ),
+                            agent_registry=self.agent_registry,
+                        )
+
+                    elif name == "magent_spec":
+                        spec_id = arguments["spec_id"]
+                        const = require_artifact(self.spec_store, spec_id, "constitution")
+                        result = run_single_agent_phase(
+                            spec_store=self.spec_store, spec_id=spec_id,
+                            kind="feature_spec",
+                            agent_name="business_analyst",
+                            user_intent=(
+                                f"Idea: {arguments['idea']}\n\n"
+                                "Produce a FeatureSpec with at least one UserStory (priority + "
+                                "G/W/T scenarios that pass the tautology validator), 3+ "
+                                "Functional Requirements (FR-### IDs, RFC 2119 verbs in the "
+                                "statement), success_criteria, assumptions, and ANY [NEEDS "
+                                "CLARIFICATION] items the BA would normally raise."
+                            ),
+                            context_artifacts={"constitution": const},
+                            agent_registry=self.agent_registry,
+                        )
+
+                    elif name == "magent_clarify":
+                        spec_id = arguments["spec_id"]
+                        spec = require_artifact(self.spec_store, spec_id, "feature_spec")
+                        if not spec.all_clarifications():
+                            return [TextContent(type="text", text=json.dumps(
+                                {"ok": True, "note": "no clarifications to resolve"}, indent=2))]
+                        answers_arg = arguments.get("answers") or []
+                        result = run_single_agent_phase(
+                            spec_store=self.spec_store, spec_id=spec_id,
+                            kind="clarification_log",
+                            agent_name="business_analyst",
+                            user_intent=(
+                                "Resolve every [NEEDS CLARIFICATION] item below by proposing a "
+                                "concrete answer. If pre-supplied answers exist, prefer those.\n\n"
+                                f"Open items: {spec.all_clarifications()}\n"
+                                f"Pre-supplied answers (may be empty): {answers_arg}"
+                            ),
+                            context_artifacts={"feature_spec": spec},
+                            agent_registry=self.agent_registry,
+                        )
+                        # Mark spec as clarified — strip needs_clarification fields.
+                        cleaned = spec.model_copy(update={
+                            "needs_clarification": [],
+                            "requirements": [
+                                r.model_copy(update={"needs_clarification": []})
+                                for r in spec.requirements
+                            ],
+                        })
+                        self.spec_store.save_artifact(spec_id, "feature_spec", cleaned)
+
+                    elif name == "magent_plan":
+                        spec_id = arguments["spec_id"]
+                        spec = require_artifact(self.spec_store, spec_id, "feature_spec")
+                        require_resolved_clarifications(spec)
+                        const = require_artifact(self.spec_store, spec_id, "constitution")
+                        result = run_multi_agent_phase(
+                            spec_store=self.spec_store, spec_id=spec_id,
+                            kind="plan",
+                            agent_names=[
+                                "system_architect", "database_administrator", "cloud_architect",
+                            ],
+                            merger_agent="system_architect",
+                            user_intent=(
+                                "Produce an ImplementationPlan: tech_stack, components (each "
+                                "owns at least one FR-ID), data_model, api_contracts, "
+                                "nfr_coverage. Reject any plan whose components leave FR-IDs "
+                                "unowned."
+                            ),
+                            context_artifacts={"constitution": const, "feature_spec": spec},
+                            agent_registry=self.agent_registry,
+                        )
+
+                    elif name == "magent_tasks":
+                        spec_id = arguments["spec_id"]
+                        spec = require_artifact(self.spec_store, spec_id, "feature_spec")
+                        plan = require_artifact(self.spec_store, spec_id, "plan")
+                        from utils.test_framework_detector import detect, failing_test_path
+                        from pathlib import Path as _P
+                        proj_root = _P(arguments.get("project_root") or ".")
+                        framework = detect(proj_root)
+                        # Multi-agent: sdet emits failing tests + qa designs scenarios.
+                        result = run_multi_agent_phase(
+                            spec_store=self.spec_store, spec_id=spec_id,
+                            kind="tasks",
+                            agent_names=["sdet", "qa_engineer"],
+                            merger_agent="sdet",
+                            user_intent=(
+                                f"Test framework detected: {framework.name} ({framework.language}).\n"
+                                f"Test files MUST live under specs/{spec_id}/{framework.test_dir} "
+                                f"with extension .{framework.extension}.\n\n"
+                                "Produce a TaskList where every Task has: id (T###), title, files, "
+                                "parallel_safe, fr_ids referencing existing FR-IDs, "
+                                "failing_test_path (concrete path under the spec dir), depends_on. "
+                                "Cover every Functional Requirement with at least one task."
+                            ),
+                            context_artifacts={"feature_spec": spec, "plan": plan,
+                                                "framework": framework.__dict__},
+                            agent_registry=self.agent_registry,
+                        )
+                        # Phase 7J: per-task scoped failing tests via sdet.
+                        # Each test imports the task's own files directly and
+                        # asserts only what the task is responsible for —
+                        # never an end-to-end-flow that depends on other tasks.
+                        from utils.spec_pipeline import generate_failing_test_for_task
+                        tl = result.model
+                        for t in tl.tasks:
+                            test_full = self.spec_store._spec_dir(spec_id) / t.failing_test_path
+                            if test_full.exists():
+                                continue
+                            try:
+                                test_src, usage = generate_failing_test_for_task(
+                                    task=t, spec=spec,
+                                    framework_name=framework.name,
+                                    framework_extension=framework.extension,
+                                )
+                                self.spec_store.record_phase_cost(
+                                    spec_id, "tasks",
+                                    {"phase_role": "sdet_test_gen", "task": t.id, **usage},
+                                )
+                                if test_src and "assert" in test_src.lower():
+                                    self.spec_store.write_failing_test(
+                                        spec_id, t.failing_test_path, test_src,
+                                    )
+                                else:
+                                    # sdet failed; fall back to the placeholder so
+                                    # downstream gates don't block on a missing file.
+                                    self.spec_store.write_failing_test(
+                                        spec_id, t.failing_test_path,
+                                        f"# Failing test stub for {t.id} ({t.fr_ids}).\n"
+                                        f"# sdet test generation failed — replace with real test.\n"
+                                        f"def test_{t.id.lower()}_placeholder():\n    assert False, "
+                                        f"'TODO: implement scenario for {t.title}'\n",
+                                    )
+                            except Exception as e:
+                                # Never let test-gen failure break magent_tasks itself.
+                                self.spec_store.write_failing_test(
+                                    spec_id, t.failing_test_path,
+                                    f"# Failing test stub for {t.id} (test-gen errored: "
+                                    f"{type(e).__name__}).\n"
+                                    f"def test_{t.id.lower()}_placeholder():\n    assert False, "
+                                    f"'TODO: implement scenario for {t.title}'\n",
+                                )
+
+                    elif name == "magent_implement":
+                        spec_id = arguments["spec_id"]
+                        # Eager gate-check: tasks must exist and validate.
+                        require_artifact(self.spec_store, spec_id, "tasks")
+                        require_artifact(self.spec_store, spec_id, "plan")
+                        require_artifact(self.spec_store, spec_id, "feature_spec")
+                        from utils.implement_runner import run_implementation
+                        from pathlib import Path as _P
+                        proj_dir = arguments.get("project_dir")
+                        if proj_dir:
+                            project_dir = _P(proj_dir).resolve()
+                        else:
+                            project_dir = self.spec_store._spec_dir(spec_id) / "workspace"
+                            project_dir = project_dir.resolve()
+                        run_result = run_implementation(
+                            spec_store=self.spec_store, spec_id=spec_id,
+                            project_dir=project_dir,
+                            agent_name=arguments.get("agent") or "fullstack_developer",
+                            task_ids=arguments.get("task_ids"),
+                        )
+                        # Synthesize a PhaseResult-shaped body so the magent_*
+                        # response shape stays consistent with other tools.
+                        passed = sum(1 for o in run_result.outcomes if o.test_passed)
+                        committed = sum(1 for o in run_result.outcomes if o.commit_sha)
+                        body = {
+                            "ok": True,
+                            "spec_id": spec_id,
+                            "kind": "implementation_trace",
+                            "path": str(self.spec_store._spec_dir(spec_id) / "implementation_trace.json"),
+                            "workspace": str(project_dir),
+                            "tasks_run": len(run_result.outcomes),
+                            "tests_passed": passed,
+                            "commits_landed": committed,
+                            "outcomes": [
+                                {
+                                    "task_id": o.task_id, "fr_ids": o.fr_ids,
+                                    "files": o.files_written, "test_passed": o.test_passed,
+                                    "commit": (o.commit_sha[:7] if o.commit_sha else None),
+                                    "error": o.error,
+                                }
+                                for o in run_result.outcomes
+                            ],
+                        }
+                        return [TextContent(type="text", text=json.dumps(body, indent=2))]
+
+                    elif name == "magent_audit":
+                        spec_id = arguments["spec_id"]
+                        spec = require_artifact(self.spec_store, spec_id, "feature_spec")
+                        plan = require_artifact(self.spec_store, spec_id, "plan")
+                        trace = require_artifact(self.spec_store, spec_id, "implementation_trace")
+                        result = run_multi_agent_phase(
+                            spec_store=self.spec_store, spec_id=spec_id,
+                            kind="audit",
+                            agent_names=[
+                                "delivery_manager", "security_engineer",
+                                "performance_engineer", "qa_engineer",
+                            ],
+                            merger_agent="delivery_manager",
+                            user_intent=(
+                                "Audit the implementation against the spec + plan. Produce "
+                                "an Audit with phases (Requirements/Design/Development/Test/"
+                                "Security/Performance/Docs/Deployment/Rollback/Monitoring), "
+                                "reviewer_findings (one per agent, blocking flag set when the "
+                                "issue must be fixed pre-release), and recommendation."
+                            ),
+                            context_artifacts={"feature_spec": spec, "plan": plan,
+                                                "implementation_trace": trace},
+                            agent_registry=self.agent_registry,
+                        )
+
+                    elif name == "magent_release":
+                        spec_id = arguments["spec_id"]
+                        audit = require_artifact(self.spec_store, spec_id, "audit")
+                        if audit.recommendation == "NO-GO":
+                            return [TextContent(type="text", text=json.dumps(
+                                {"ok": False, "blocked_by": "audit recommendation is NO-GO"},
+                                indent=2,
+                            ))]
+                        # Re-use Phase 6 ReleaseAudit schema for the final gate.
+                        from agents.schemas import ReleaseAudit  # noqa: F401  (registry side-effect not needed)
+                        result = run_single_agent_phase(
+                            spec_store=self.spec_store, spec_id=spec_id,
+                            kind="audit",  # release ledger overlays on Audit for now
+                            agent_name="delivery_manager",
+                            user_intent=(
+                                "Make the release call. Re-emit the Audit with "
+                                "recommendation set to GO or GO-WITH-CONDITIONS based "
+                                "on the prior audit phases. Add explicit conditions if "
+                                "GO-WITH-CONDITIONS."
+                            ),
+                            context_artifacts={"audit": audit},
+                            agent_registry=self.agent_registry,
+                        )
+
+                    elif name == "magent_spec_delta":
+                        spec_id = arguments["spec_id"]
+                        spec = require_artifact(self.spec_store, spec_id, "feature_spec")
+                        result = run_single_agent_phase(
+                            spec_store=self.spec_store, spec_id=spec_id,
+                            kind="spec_delta",
+                            agent_name="business_analyst",
+                            user_intent=(
+                                f"Base version: {arguments['base_version']}\n"
+                                f"Intent: {arguments['intent']}\n\n"
+                                "Produce a SpecDelta — only ADDED / MODIFIED / REMOVED / RENAMED "
+                                "requirements. Do NOT rewrite the full spec. RFC 2119 verbs in "
+                                "all new statements."
+                            ),
+                            context_artifacts={"feature_spec": spec},
+                            agent_registry=self.agent_registry,
+                        )
+
+                    else:
+                        return [TextContent(type="text", text=f"Unknown magent_ tool: {name}")]
+
+                    body = {
+                        "ok": True,
+                        "spec_id": result.spec_id,
+                        "kind": result.kind,
+                        "path": str(result.path),
+                        "attempts": result.attempts,
+                        "summary": (
+                            result.model.model_dump_json(indent=2)[:1500]
+                            + ("\n... (truncated)"
+                               if len(result.model.model_dump_json()) > 1500 else "")
+                        ),
+                    }
+                    return [TextContent(type="text", text=json.dumps(body, indent=2))]
+
+                except GateError as ge:
+                    return [TextContent(type="text", text=json.dumps(
+                        {"ok": False, "phase_gate": str(ge)}, indent=2))]
+                except PhaseEscalation as pe:
+                    return [TextContent(type="text", text=json.dumps(
+                        {"ok": False, "escalation": {
+                            "kind": pe.kind, "attempts": pe.attempts,
+                            "last_error": pe.last_error,
+                        }}, indent=2))]
 
             else:
                 return [

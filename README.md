@@ -1,6 +1,6 @@
 # mageNT
 
-![version](https://img.shields.io/badge/version-0.5.0-blue)
+![version](https://img.shields.io/badge/version-0.6.0-blue)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
@@ -17,6 +17,12 @@ Ever wish Claude had deep expertise in specific areas? That's what mageNT does. 
 - Designing an API? Ask the API Developer
 
 Think of it like having 32 senior devs on standby, each with their own specialty. You can also run a full spec-driven development cycle — from requirements to parallel implementation to delivery audit — with a single tool call per step.
+
+## What's new in 0.6
+
+A complete spec-driven pipeline that takes an idea to a passing-tests, audited, release-ready artifact: `magent_constitution → magent_spec → magent_clarify → magent_plan → magent_tasks → magent_implement → magent_audit → magent_release`. Every artifact is a typed Pydantic schema (`agents/spec_schemas.py`); a validator CLI (`tools/validate_spec.py`) cross-checks FR-IDs, refuses unresolved `[NEEDS CLARIFICATION]` items, and confirms every Task's `failing_test_path` exists on disk. Plus brownfield deltas (`magent_spec_delta`), per-phase cost tracking, stuck-loop escalation, and a `PRE_COMMIT` hook that auto-prepends FR-IDs to commit messages. Slash-command UX via 9 new Claude Code skills.
+
+See [Building from Idea to Release](#building-from-idea-to-release) below.
 
 ## What's new in 0.5
 
@@ -381,6 +387,80 @@ Each agent's system prompt is assembled by [`utils/prompt_builder.py`](utils/pro
 
 Pydantic schemas live in [`agents/schemas.py`](agents/schemas.py): `SecurityReport`, `ADR`, `ReleaseAudit`, `DebugReport`, `PerfHypothesisReport`, `IndexAuditReport`, `TestPlan`. Adding `output_schema_class` to a new agent makes its responses parser-validatable end-to-end.
 
+## Building from Idea to Release
+
+The Phase 7 pipeline takes a one-line idea to a release-ready PR through eight schema-validated phases. Each phase routes to one or more specialist agents, validates the output against a Pydantic model, and refuses to advance if upstream artifacts are missing or invalid.
+
+```
+magent_constitution   delivery_manager + system_architect (parallel)
+        ↓
+magent_spec           business_analyst   → FeatureSpec (FR-### + RFC 2119 + G/W/T)
+        ↓
+magent_clarify        business_analyst   → ClarificationLog
+        ↓
+magent_plan           system_architect + database_administrator + cloud_architect
+        ↓
+magent_tasks          sdet + qa_engineer → TaskList (with auto-generated failing tests)
+        ↓
+magent_implement      per-task developer agents → ImplementationTrace
+        ↓
+magent_audit          delivery_manager + security_engineer + performance_engineer + qa_engineer
+        ↓
+magent_release        delivery_manager → ReleaseAudit (GO / NO-GO / GO-WITH-CONDITIONS)
+```
+
+**Validators that competitors only enforce by convention:**
+
+- Tautological `THEN` clauses (`feature works as specified`) are rejected at schema time.
+- Every Functional Requirement must contain its declared RFC 2119 verb (`MUST`, `SHOULD`, `MAY`, ...).
+- `magent_plan` refuses to run if any `[NEEDS CLARIFICATION]` item is open on the spec.
+- `magent_implement` refuses to run if any task's `failing_test_path` is absent on disk.
+- `magent validate <spec-id>` cross-references FR-IDs across spec / tasks / implementation_trace.
+
+**Capability comparison vs the leaders (May 2026):**
+
+| Capability | Spec Kit | OpenSpec | GSD | mageNT 0.6 |
+|---|---|---|---|---|
+| FR-### IDs + RFC 2119 verbs | yes | yes | partial | **schema-validated** |
+| Given/When/Then with falsifiable conditions | template | template | partial | **schema rejects tautology** |
+| `[NEEDS CLARIFICATION]` blockers | yes | no | no | **typed, gates downstream** |
+| Validator CLI | `/speckit.analyze` | `openspec validate` | partial | **`magent validate`** |
+| Delta / brownfield specs | no | **killer feature** | no | **`magent_spec_delta`** |
+| Constitution / project principles | yes | no | partial | **`magent_constitution`** |
+| Tasks file with `[P]` parallel-safe + file paths | yes | implied | partial | **`Task` schema requires both** |
+| Scenario → failing test derivation | implied | implied | no | **automatic, refuses to advance** |
+| Multi-agent specialization at every phase | no | no | no | **yes (the structural moat)** |
+| Pydantic schema as wire contract | no | partial | no | **every artifact** |
+| FR-ID → commit traceability via hook | no | no | partial | **`PRE_COMMIT` hook** |
+| Cost / token tracking per phase | no | no | yes | **`specs/<id>/cost.json`** |
+| Stuck-loop detection + auto-escalate | no | no | yes | **3-attempt budget** |
+| Cross-spec semantic memory | no | no | session-only | **mememo (persistent embeddings)** |
+| Slash commands (Claude Code) | yes | yes | yes | **9 new skills** |
+| MCP tool surface (every other client) | no | no | no | **9 new tools** |
+
+**Quick start (against an empty project directory):**
+
+```text
+> magent_constitution project_name=todo-cli intent="A CLI todo app with add/list/done"
+> magent_spec   spec_id=todo-cli-abc123 idea="add/list/done with persistent storage"
+> magent_clarify spec_id=todo-cli-abc123
+> magent_plan   spec_id=todo-cli-abc123
+> magent_tasks  spec_id=todo-cli-abc123 project_root=.
+> magent_implement spec_id=todo-cli-abc123
+> magent_audit  spec_id=todo-cli-abc123
+> magent_release spec_id=todo-cli-abc123
+```
+
+Or invoke any phase via slash command on Claude Code: `/magent-spec`, `/magent-plan`, `/magent-tasks`, etc.
+
+Validate a spec at any time:
+
+```bash
+python tools/validate_spec.py <spec-id>     # exit 0 on pass, 1 on first failure
+```
+
+**Legacy spec tools** (`create_spec`, `create_arch_spec`, `run_parallel_agents`, `audit_spec`) still work and are kept for backwards compatibility, marked `[deprecated]` in their tool descriptions.
+
 ## Eval Harness
 
 [`tests/prompt_eval/`](tests/prompt_eval/) compares prompt variants on a fixed task suite. The harness scores each response on a 7-dimension rubric (opinionatedness, scope_discipline, output_structure, conciseness, actionability, **parseability**, **template_adherence**) judged by a configurable LLM, and validates every response against the agent's Pydantic schema.
@@ -470,7 +550,8 @@ mageNT/
 ├── config.yaml                  # Your settings
 ├── install.sh / install.bat     # Automated installers
 ├── agents/                      # The 33 agents
-│   └── schemas.py               # Pydantic response schemas (SecurityReport, ADR, etc.)
+│   ├── schemas.py               # Pydantic response schemas for prompt outputs (SecurityReport, ADR, ...)
+│   └── spec_schemas.py          # Pydantic schemas for the magent_* spec lifecycle (Constitution, FeatureSpec, ...)
 ├── skills/                      # Reusable skills (scaffold, test, debug, security, etc.)
 ├── rules/                       # Code quality rules
 ├── hooks/                       # Automation hooks
@@ -480,10 +561,15 @@ mageNT/
 │   └── dispatch.yaml            # Per-agent install mode (subagent / skill / mcp_only)
 ├── tools/
 │   ├── generate_dispatch.py     # Renders subagent + skill markdown from agent classes
-│   └── dispatch_manifest.py     # SHA-tracked manifest for safe upgrade/uninstall
+│   ├── dispatch_manifest.py     # SHA-tracked manifest for safe upgrade/uninstall
+│   └── validate_spec.py         # `magent validate <spec-id>` — schema + cross-ref checker
 ├── utils/                       # Orchestration, spec store, skill registry, prompt builders
+│   ├── spec_pipeline.py         # Phase 7 orchestration glue (single + multi-agent phases, gates, escalation)
+│   └── test_framework_detector.py  # Auto-detect pytest / vitest / jest / go test / cargo test
 └── tests/
     ├── test_hooks.py / test_rules.py
+    ├── test_spec_schemas.py     # Phase 7A — 29 schema validators
+    ├── test_spec_pipeline.py    # Phase 7C — full pipeline e2e with stub LLMs
     └── prompt_eval/             # Multi-model eval harness (run_matrix.py, build_report.py)
 ```
 

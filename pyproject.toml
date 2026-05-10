@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "magent"
+version = "0.6.0"
+description = "Multi-agent MCP server with a schema-validated spec-driven development pipeline."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "scr1p7k177y", email = "scriptkitty@walang.studio" },
+]
+keywords = ["mcp", "agents", "spec-driven", "pydantic", "claude"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.40"]
+openai = ["openai>=1.0", "httpx", "certifi"]
+all = ["anthropic>=0.40", "openai>=1.0", "httpx", "certifi", "requests"]
+
+[project.scripts]
+magent = "magent_cli.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/walangstudio/mageNT"
+
+[tool.setuptools.packages.find]
+include = ["magent_cli*", "agents*", "utils*", "skills*", "rules*", "hooks*", "tools*", "workflows*", "config*"]
+exclude = ["tests*", "specs*", "tools._sandbox*"]

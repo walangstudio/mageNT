@@ -208,6 +208,70 @@ def render_skill_from_skill(name: str, cls: type, spec: Dict[str, Any]) -> str:
     return "\n".join(front) + "\n\n" + "\n".join(body_lines).rstrip() + "\n"
 
 
+def render_skill_passthrough(name: str, spec: Dict[str, Any]) -> str:
+    """Render a SKILL.md for a dispatch.yaml entry that has no Python class.
+
+    Used by Phase 7 magent_* skills that wrap an MCP tool 1:1. The skill body
+    embeds the description, when-to-activate, inputs, and produces fields from
+    dispatch.yaml so a Claude Code user opening the skill sees a real workflow
+    doc — not a generic stub.
+    """
+    description = _truncate(
+        spec.get("description")
+        or f"Invokes the `{name}` MCP tool. See magent docs for the full schema.",
+        MAX_DESCRIPTION_LEN,
+    )
+    tools = spec.get("tools") or ["Read", "Bash"]
+    pretty = name.replace("_", " ").title()
+    slash_name = name.replace("_", "-")
+    # Frontmatter name must match the on-disk skill dir; if dispatch.yaml entry
+    # already prefixes with magent_, don't double-prefix.
+    fm_name = slash_name if slash_name.startswith("magent-") else f"magent-{slash_name}"
+    front = [
+        "---",
+        f"name: {fm_name}",
+        f"description: {description}",
+        f"allowed-tools: {_yaml_list(tools)}",
+        "---",
+    ]
+    body = [
+        f"# {pretty}",
+        "",
+        description,
+        "",
+    ]
+    when_text = spec.get("when")
+    if when_text:
+        body += ["## When to Activate", f"- {when_text}", ""]
+    else:
+        body += [
+            "## When to Activate",
+            f"- User invokes `/{slash_name}` or asks for a {spec.get('category', 'pipeline')} action.",
+            "",
+        ]
+    inputs = spec.get("inputs") or []
+    if inputs:
+        body += ["## Inputs"]
+        for line in inputs:
+            body.append(f"- {line}")
+        body.append("")
+    produces = spec.get("produces")
+    if produces:
+        body += ["## Produces", produces, ""]
+    body += [
+        "## Workflow",
+        f"1. Invoke the `{name}` MCP tool with the inputs above.",
+        "2. Read the validated artifact path + JSON summary the tool returns.",
+        "3. If the tool returns `phase_gate`, the upstream phase is missing or invalid — run that phase first and retry.",
+        "4. If the tool returns `escalation`, the agent failed schema validation 3x in a row — inspect `cost.json` for context and decide whether to re-prompt or hand off.",
+        "",
+        "## Slash Command",
+        f"`/{slash_name}`",
+        "",
+    ]
+    return "\n".join(front) + "\n\n" + "\n".join(body).rstrip() + "\n"
+
+
 def plan_files(
     config: Dict[str, Any],
     only_modes: Optional[List[str]] = None,
@@ -247,6 +311,31 @@ def plan_files(
             files.append((
                 f"skills/magent-{name}/SKILL.md",
                 render_skill_from_skill(name, cls, spec),
+                "skill",
+            ))
+
+    # Pass-through skills: dispatch.yaml entries with no Python class.
+    # Used for Phase 7 magent_* MCP-tool wrappers so Claude Code gets a
+    # slash-command surface without needing one BaseSkill subclass per tool.
+    rendered_skill_names = {n for n in skill_classes}
+    rendered_agent_names = {n for n in agent_classes}
+    for name, spec in skills_cfg.items():
+        if name in rendered_skill_names or name in rendered_agent_names:
+            continue
+        mode = spec.get("mode", "skill")
+        if only_modes and mode not in only_modes:
+            continue
+        if mode == "skill":
+            # Strip the redundant `magent_` prefix if the entry already has it
+            # (e.g. magent_spec → just `spec`); otherwise prepend `magent-`.
+            slug = name.replace("_", "-")
+            if slug.startswith("magent-"):
+                dirname = slug
+            else:
+                dirname = f"magent-{slug}"
+            files.append((
+                f"skills/{dirname}/SKILL.md",
+                render_skill_passthrough(name, spec),
                 "skill",
             ))
 

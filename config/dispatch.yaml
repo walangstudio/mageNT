@@ -123,6 +123,95 @@ skills:
   analyze_error:     {mode: skill, tools: [Read, Grep, Glob, Bash]}
   check_versions:    {mode: skill, tools: [Read, Bash]}
 
+  # --- Phase 7 spec pipeline skills (slash-command UX wrapping magent_* MCP tools) ---
+  magent_constitution:
+    mode: skill
+    tools: [Read, Grep, Glob]
+    category: spec_pipeline
+    description: "Generate the project Constitution (principles + NFR targets + tech constraints) via delivery_manager + system_architect."
+    inputs:
+      - "project_name (string, required)"
+      - "intent (string, required) — one-paragraph project intent"
+      - "spec_id (string, optional) — defaults to slug+uuid"
+    produces: "specs/<spec-id>/constitution.json validated against the Constitution schema."
+    when: "Start of every new project, before magent_spec."
+  magent_spec:
+    mode: skill
+    tools: [Read, Grep, Glob]
+    category: spec_pipeline
+    description: "Produce a schema-validated FeatureSpec with FR-### IDs (RFC 2119 verbs), Given/When/Then scenarios (validators reject tautology), and [NEEDS CLARIFICATION] markers. Driven by business_analyst."
+    inputs:
+      - "spec_id (string, required)"
+      - "idea (string, required) — what to build, one paragraph"
+    produces: "specs/<spec-id>/spec.json validated against the FeatureSpec schema."
+    when: "After magent_constitution. Before magent_clarify or magent_plan."
+  magent_clarify:
+    mode: skill
+    tools: [Read, Grep, Glob]
+    category: spec_pipeline
+    description: "Resolve every [NEEDS CLARIFICATION] marker on the FeatureSpec. Driven by business_analyst."
+    inputs:
+      - "spec_id (string, required)"
+      - "answers (array of {question, answer}, optional) — pre-supplied answers"
+    produces: "specs/<spec-id>/clarifications.json + an updated spec.json with no remaining clarifications."
+    when: "Whenever the spec has open clarification items. Required before magent_plan."
+  magent_plan:
+    mode: skill
+    tools: [Read, Grep, Glob]
+    category: spec_pipeline
+    description: "Produce an ImplementationPlan from system_architect + database_administrator + cloud_architect (parallel, merged by system_architect)."
+    inputs:
+      - "spec_id (string, required)"
+    produces: "specs/<spec-id>/plan.json validated against the ImplementationPlan schema."
+    when: "After magent_spec + magent_clarify. Gate: spec must have zero open clarifications."
+  magent_tasks:
+    mode: skill
+    tools: [Read, Write, Grep, Glob]
+    category: spec_pipeline
+    description: "Decompose the plan into a TaskList (with [P] parallel-safe tags + file paths + fr_ids). For every Given/When/Then scenario, sdet emits a failing test stub in the auto-detected framework."
+    inputs:
+      - "spec_id (string, required)"
+      - "project_root (string, optional) — used for test-framework detection; defaults to cwd"
+    produces: "specs/<spec-id>/tasks.json + N failing test files under specs/<spec-id>/tests/."
+    when: "After magent_plan. Gate: plan must validate."
+  magent_implement:
+    mode: skill
+    tools: [Read, Write, Edit, Bash, Grep, Glob]
+    category: spec_pipeline
+    description: "Run per-task agents and emit ImplementationTrace mapping FR-IDs to commit SHAs. Refuses to advance until every failing_test_path exists on disk."
+    inputs:
+      - "spec_id (string, required)"
+      - "task_ids (array, optional) — subset of tasks to run; default: all"
+    produces: "specs/<spec-id>/implementation_trace.json + actual file edits + git commits tagged with [FR-XXX]."
+    when: "After magent_tasks. Gate: tasks validate AND every failing_test_path exists."
+  magent_audit:
+    mode: skill
+    tools: [Read, Grep, Glob, Bash]
+    category: spec_pipeline
+    description: "Multi-reviewer audit: delivery_manager + security_engineer + performance_engineer + qa_engineer (parallel) merged into a single Audit schema."
+    inputs:
+      - "spec_id (string, required)"
+    produces: "specs/<spec-id>/audit.json with phase status + reviewer findings + recommendation (GO / NO-GO / GO-WITH-CONDITIONS)."
+    when: "After magent_implement. Before magent_release."
+  magent_release:
+    mode: skill
+    tools: [Read, Grep, Glob]
+    category: spec_pipeline
+    description: "Final release-readiness gate. Re-emits the Audit with the GO / GO-WITH-CONDITIONS decision."
+    inputs:
+      - "spec_id (string, required)"
+    produces: "specs/<spec-id>/audit.json (overwritten) with the release decision and conditions."
+    when: "After magent_audit. Gate: audit must recommend GO or GO-WITH-CONDITIONS."
+  magent_validate:
+    mode: skill
+    tools: [Read, Bash, Grep, Glob]
+    category: spec_pipeline
+    description: "Schema + cross-reference validator over an entire spec directory. Catches unresolved clarifications, missing failing-test files, FR-ID drift across tasks/trace."
+    inputs:
+      - "spec_id (string, required)"
+    produces: "JSON report with ok / loaded / missing / warnings / errors."
+    when: "Anytime — before any phase to confirm upstream artifacts are clean."
+
 # Stateful tools that have no skill/subagent equivalent and stay MCP-only.
 mcp_only_tools:
   - workflows
