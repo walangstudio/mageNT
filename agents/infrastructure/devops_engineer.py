@@ -11,6 +11,8 @@ except ImportError:
 class DevOpsEngineer(BaseAgent):
     """DevOps Engineer specializing in CI/CD, containerization, and infrastructure."""
 
+    expertise_level = "staff"
+
     @property
     def name(self) -> str:
         return "devops_engineer"

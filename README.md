@@ -1,6 +1,6 @@
 # mageNT
 
-![version](https://img.shields.io/badge/version-0.6.0-blue)
+![version](https://img.shields.io/badge/version-0.7.0-blue)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
@@ -16,7 +16,15 @@ Ever wish Claude had deep expertise in specific areas? That's what mageNT does. 
 - Building a React app? Get the React Developer
 - Designing an API? Ask the API Developer
 
-Think of it like having 32 senior devs on standby, each with their own specialty. You can also run a full spec-driven development cycle — from requirements to parallel implementation to delivery audit — with a single tool call per step.
+Think of it like having 37 specialists on standby — Principals, Staff, and Senior engineers picked per role, plus a team-lead coordinator — each with their own specialty. You can also run a full spec-driven development cycle — from requirements to parallel implementation to delivery audit — with a single tool call per step, or spawn a parallel team of teammates in Claude Code (v2.1.32+).
+
+## What's new in 0.7
+
+Claude Code agent-teams support (experimental). A new `--profile teams` install emits every agent — including a coordinating `magent-team_lead` — as a subagent under `~/.claude/agents/`, so any of them is spawnable as a parallel teammate via Claude Code's [agent-teams feature](https://code.claude.com/docs/en/agent-teams). Four shipped presets (audit / spec / release / stack-build) in [`examples/teams/`](examples/teams/). Two lifecycle hooks in [`hooks/teams/`](hooks/teams/) wire `magent validate` into `TaskCompleted` and append teammate-idle status to `specs/active/team_log.md`. New `magent doctor` CLI reports install count, env flag, Claude Code version, and per-preset roster completeness.
+
+Per-agent seniority is now configurable. Each agent has a baked `expertise_level` (Principal / Staff / Senior / specialist) overridable via `~/.magent/seniority.yaml`, `./magent.seniority.yaml`, `--seniority-profile`, or `--seniority` CLI flag. `team_model` derives from level (Principal/Staff → Opus, Senior/specialist → Sonnet) and lands in the generated `model:` frontmatter for teammate spawning.
+
+Plus a renderer fix: subagent bodies no longer open with the stale "You are a Principal X, X specializing in..." duplication; the role line now reads cleanly as "You are a Staff Security Engineer." See [`docs/AGENT_TEAMS.md`](docs/AGENT_TEAMS.md).
 
 ## What's new in 0.6
 
@@ -171,6 +179,17 @@ Per-agent dispatch lives in [`config/dispatch.yaml`](config/dispatch.yaml). Mark
 ./install.sh -c claude --dry-run             # preview actions without writing
 ```
 
+### Agent teams support (experimental)
+
+Claude Code v2.1.32+ has an experimental [agent-teams feature](https://code.claude.com/docs/en/agent-teams) that spawns separate Claude Code instances as parallel teammates. mageNT installs every agent (including a coordinating `magent-team_lead`) as a subagent so it's spawnable as a teammate:
+
+```bash
+./install.sh -c claude --mode subagents --profile teams --enable-teams
+magent doctor                                 # readiness check
+```
+
+Four preset prompts in [`examples/teams/`](examples/teams/) cover audit, spec, release, and stack-build flows. See [`docs/AGENT_TEAMS.md`](docs/AGENT_TEAMS.md) for the full guide and lifecycle hooks.
+
 ### Checking install status
 
 ```bash
@@ -269,18 +288,19 @@ Consult the Security Engineer about this auth code
 
 ## Who's on the Team
 
-33 agents across different areas:
+37 agents across different areas. Each has a baked seniority level (Principal / Staff / Senior / specialist) that drives both the system-prompt role line and — in Claude Code agent teams — the `model:` selection (Principal/Staff → Opus, Senior/specialist → Sonnet).
 
 | What they do | Who's available |
 |----------|--------|
-| Business stuff | Business Analyst, Product Manager, Delivery Manager |
-| Architecture & Design | System Architect, UI/UX Designer |
+| Coordination | Team Lead (Principal — agent-teams coordinator) |
+| Business stuff | Business Analyst, Product Manager (Principal), Delivery Manager (Principal) |
+| Architecture & Design | System Architect (Principal), UI/UX Designer |
 | Frontend | React, Next.js, Vue.js, Svelte devs |
 | Backend | Node.js, Python, Java, Go, .NET, Rust, API, Integration specialists |
-| Infrastructure | Database Admin, DevOps, Cloud Architect |
-| Quality & Security | QA Engineer, SDET, Automation QA, Security Engineer, Performance Engineer |
+| Infrastructure | Database Administrator (Staff), DevOps (Staff), Cloud Architect (Principal) |
+| Quality & Security | Security Engineer (Staff), Performance Engineer (Staff), SDET (Staff), QA Engineer, Automation QA, Debugging Expert |
 | Mobile | Flutter, React Native, Android (Kotlin/Java), iOS (Swift/Obj-C), Mobile Dev |
-| Other | Technical Writer, Debugging Expert, Full-Stack Dev |
+| Other | Technical Writer, PHP, TUI, CLI/Installer, Full-Stack Dev |
 
 ## Spec-Driven Development
 
@@ -367,9 +387,17 @@ Edit `config.yaml` to tune agents:
 agents:
   react_developer:
     enabled: true
-    expertise_level: "senior"  # junior, mid, senior, or principal
+    expertise_level: "senior"   # principal | staff | senior | "" (no level word)
     specialization: "React 18, TypeScript, Tailwind"
 ```
+
+Seniority can also be overridden without editing class code:
+
+- `~/.magent/seniority.yaml` (per-machine) or `./magent.seniority.yaml` (per-repo): `{security_engineer: principal, react_developer: staff}`
+- `magent generate --seniority security_engineer=principal,react_developer=staff`
+- `magent generate --seniority-profile principal-heavy` (presets in [`config/seniority_profiles.yaml`](config/seniority_profiles.yaml))
+
+The resolved level bakes into the generated subagent markdown at install time — no runtime lookup.
 
 ## Prompt Template (v2)
 
@@ -549,7 +577,7 @@ mageNT/
 ├── server.py                    # MCP server
 ├── config.yaml                  # Your settings
 ├── install.sh / install.bat     # Automated installers
-├── agents/                      # The 33 agents
+├── agents/                      # The 37 agents (incl. coordination/team_lead)
 │   ├── schemas.py               # Pydantic response schemas for prompt outputs (SecurityReport, ADR, ...)
 │   └── spec_schemas.py          # Pydantic schemas for the magent_* spec lifecycle (Constitution, FeatureSpec, ...)
 ├── skills/                      # Reusable skills (scaffold, test, debug, security, etc.)

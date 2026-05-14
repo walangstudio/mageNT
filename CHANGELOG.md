@@ -6,6 +6,105 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.0] - 2026-05-14
+
+### Added
+
+#### Claude Code agent-teams support (experimental)
+
+Wires mageNT's 36 specialist agents (plus a new `magent-team_lead`
+coordinator) into Claude Code's experimental
+[agent-teams feature](https://code.claude.com/docs/en/agent-teams) (requires
+Claude Code v2.1.32+, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`). Teammates
+are spawned by subagent type and inherit the `tools:` allowlist + body —
+not `skills` or `mcpServers` — so agent bodies must be self-contained.
+mageNT bodies already were.
+
+- `--profile teams` (`tools/generate_dispatch.py`) — emits every registered
+  agent class as a subagent regardless of `dispatch.yaml` mode, so every
+  team preset has a complete roster (37 agents incl. `magent-team_lead`).
+- Each rendered subagent body now ends with a `## Team Context` block
+  reminding the teammate that `SendMessage` is always available in a team
+  regardless of the frontmatter `tools:` allowlist.
+- `agents/coordination/team_lead.py` — new Principal-level coordinator
+  (`magent-team_lead`) that routes requests to the right specialist roster,
+  forwards findings between teammates via `SendMessage`, and synthesizes
+  outputs.
+- `examples/teams/` — four copy-pasteable team prompts:
+  `audit-team`, `spec-team`, `release-team`, `stack-build-team`.
+- `hooks/teams/task_completed_validate.py` — `TaskCompleted` hook that runs
+  `magent validate` against `specs/`; exit 2 rejects the completion and
+  surfaces validator errors to the teammate.
+- `hooks/teams/teammate_idle_summary.py` — `TeammateIdle` hook that appends
+  one-line status to `specs/active/team_log.md` for the lead's synthesis.
+- `tools/enable_teams.py` — idempotent JSON merge that sets
+  `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in `~/.claude/settings.json`.
+- `install.sh` / `install.bat`: `--enable-teams` / `--no-enable-teams`
+  flags and interactive prompt when installing in `subagents` or `hybrid`
+  mode.
+- `magent doctor` (CLI) — reports agent count, env flag, Claude Code
+  version (must be ≥ 2.1.32), and per-preset roster completeness.
+- `docs/AGENT_TEAMS.md` — full guide: prereqs, install, presets, hooks,
+  caveats.
+
+#### Seniority resolver
+
+Six-layer override (CLI → project → user → profile → class default →
+fallback) for per-agent `expertise_level`. Resolved at install time and
+baked into the rendered subagent markdown — no runtime lookup.
+
+- `tools/resolve_seniority.py` — `resolve(agent_name, class_default)`.
+- `config/seniority_profiles.yaml` — `default`, `principal-heavy`,
+  `flat-senior` presets.
+- `magent generate --seniority <a>=<level>,...` and
+  `--seniority-profile <name>` flags.
+- Per-machine override at `~/.magent/seniority.yaml`; per-repo at
+  `./magent.seniority.yaml`.
+
+Baked class-level defaults:
+- **Principal**: `system_architect`, `cloud_architect`, `delivery_manager`,
+  `product_manager`, `team_lead`.
+- **Staff**: `security_engineer`, `performance_engineer`, `sdet`,
+  `devops_engineer`, `database_administrator`.
+- **Senior**: every developer + `qa_engineer`, `automation_qa`,
+  `debugging_expert` (class default — no per-agent override needed).
+- **No level word** (`""`): `business_analyst`, `technical_writer`,
+  `ui_ux_designer`, `integration_specialist`.
+
+#### Team-model selection
+
+`BaseAgent.team_model` maps `expertise_level` → Claude model alias
+(Principal/Staff → `opus`, Senior/specialist → `sonnet`). Emitted into the
+frontmatter `model:` field by `generate_dispatch` and read by Claude Code
+when spawning the teammate. Inert outside agent-teams context.
+
+### Changed
+
+#### Role-line renderer fix
+
+Generated subagent bodies opened with `"You are a Principal <Role>, <Role>
+specializing in <X>."` because (a) `_instantiate_agent` hardcoded
+`expertise_level="principal"` and (b) the class docstring's first line was
+injected as `specialization` and concatenated with the role. Both removed:
+
+- `_instantiate_agent` now respects each class's `expertise_level` (with
+  resolver overrides) and no longer touches docstrings.
+- `PromptBuilder.build_agent_prompt` drops the `specialization` segment
+  when it restates the role; emits `"You are a <Role>."` with no level
+  word when `expertise_level` is empty (specialist roles).
+
+Re-running `magent generate` overwrites the stale installs. Test:
+`tests/test_prompt_builder.py` (5 cases).
+
+### Notes
+
+- Behavior change for users who regenerate: subagent role lines now reflect
+  the four-tier seniority table, not the previous uniform "Principal".
+- No API break. `BaseAgent`'s public surface, MCP tool list, and skill list
+  are unchanged.
+
+---
+
 ## [0.4.0] - 2026-03-20
 
 ### Added

@@ -11,6 +11,8 @@ except ImportError:
 class ProductManager(BaseAgent):
     """Product Manager specializing in product strategy and roadmapping."""
 
+    expertise_level = "principal"
+
     @property
     def name(self) -> str:
         return "product_manager"

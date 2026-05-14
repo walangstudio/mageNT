@@ -11,6 +11,8 @@ except ImportError:
 class IntegrationSpecialist(BaseAgent):
     """Integration Specialist for connecting systems and services."""
 
+    expertise_level = ""
+
     @property
     def name(self) -> str:
         return "integration_specialist"

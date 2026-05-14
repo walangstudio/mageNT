@@ -11,6 +11,8 @@ except ImportError:
 class SDET(BaseAgent):
     """SDET specializing in test engineering, test infrastructure, and quality toolchains."""
 
+    expertise_level = "staff"
+
     @property
     def name(self) -> str:
         return "sdet"

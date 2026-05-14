@@ -94,10 +94,18 @@ class PromptBuilder:
 
         parts: List[str] = []
 
-        # <role> — cache prefix anchor. Specialization is merged in here.
-        opener = f"You are a {expertise_level.capitalize()} {role}"
-        if specialization:
-            opener = f"{opener}, {specialization.strip().rstrip('.')}"
+        # <role> — cache prefix anchor.
+        # Level word is dropped when expertise_level is empty (specialist roles).
+        # Specialization is only appended when it adds info beyond the role name
+        # (i.e. doesn't already restate the role); otherwise it's silently dropped.
+        level = (expertise_level or "").strip()
+        if level:
+            opener = f"You are a {level.capitalize()} {role}"
+        else:
+            opener = f"You are a {role}"
+        spec = (specialization or "").strip().rstrip(".")
+        if spec and role.lower() not in spec.lower():
+            opener = f"{opener}, {spec}"
         opener += "."
         if opinionated_stance:
             opener = f"{opener} {opinionated_stance.strip()}"

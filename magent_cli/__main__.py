@@ -33,7 +33,84 @@ def _cmd_generate(args: argparse.Namespace) -> int:
         forwarded.append("--dry-run")
     if args.force:
         forwarded.append("--force")
+    if getattr(args, "seniority", None):
+        forwarded += ["--seniority", args.seniority]
+    if getattr(args, "seniority_profile", None):
+        forwarded += ["--seniority-profile", args.seniority_profile]
     return generate_main(forwarded) or 0
+
+
+_TEAM_PRESETS = {
+    "audit-team":       ["delivery_manager", "security_engineer",
+                         "performance_engineer", "qa_engineer"],
+    "spec-team":        ["business_analyst", "system_architect", "product_manager"],
+    "release-team":     ["qa_engineer", "devops_engineer", "delivery_manager"],
+    "stack-build-team": ["system_architect", "react_developer",
+                         "nodejs_backend", "database_administrator"],
+}
+
+
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    """Check agent-teams readiness: install count, env flag, version, presets."""
+    import json
+    import os
+    import re
+    import shutil
+    import subprocess
+    from glob import glob
+
+    agents_dir = os.path.expanduser("~/.claude/agents")
+    installed = sorted(
+        os.path.basename(p)[len("magent-"):-3]
+        for p in glob(os.path.join(agents_dir, "magent-*.md"))
+    )
+    print(f"agents installed: {len(installed)} at {agents_dir}")
+
+    settings_path = os.path.expanduser("~/.claude/settings.json")
+    flag_set = False
+    if os.path.isfile(settings_path):
+        try:
+            with open(settings_path, "r", encoding="utf-8") as f:
+                env = (json.load(f) or {}).get("env") or {}
+            flag_set = str(env.get("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "")) == "1"
+        except (OSError, json.JSONDecodeError):
+            pass
+    print(f"agent-teams flag:  {'enabled' if flag_set else 'NOT SET'} in {settings_path}")
+
+    claude_bin = shutil.which("claude")
+    version_ok = False
+    version_text = "(claude CLI not on PATH)"
+    if claude_bin:
+        try:
+            out = subprocess.run(
+                [claude_bin, "--version"], capture_output=True, text=True, timeout=5,
+            )
+            version_text = (out.stdout or out.stderr or "").strip() or "(no output)"
+            m = re.search(r"(\d+)\.(\d+)\.(\d+)", version_text)
+            if m:
+                major, minor, patch = (int(x) for x in m.groups())
+                version_ok = (major, minor, patch) >= (2, 1, 32)
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            version_text = f"(error: {exc})"
+    print(f"claude version:    {version_text} -- "
+          f"{'OK' if version_ok else 'needs 2.1.32+'}")
+
+    print("\npreset roster check:")
+    installed_set = set(installed)
+    any_missing = False
+    for preset, roles in _TEAM_PRESETS.items():
+        missing = [r for r in roles if r not in installed_set]
+        if missing:
+            any_missing = True
+            print(f"  {preset}: missing {', '.join('magent-' + m for m in missing)}")
+        else:
+            print(f"  {preset}: OK")
+
+    if any_missing:
+        print("\nTo install missing roles: run install.sh / install.bat with "
+              "--mode subagents --profile teams, or "
+              "`magent generate --target ~/.claude --profile teams`.")
+    return 0
 
 
 def _cmd_eval(args: argparse.Namespace) -> int:
@@ -111,10 +188,21 @@ def main(argv: list[str] | None = None) -> int:
     # generate
     p_gen = sub.add_parser("generate", help="Render subagent + skill markdown from agent classes.")
     p_gen.add_argument("--target", help="Output directory")
-    p_gen.add_argument("--profile", choices=["full", "subagents", "skills"])
+    p_gen.add_argument("--profile", choices=["full", "subagents", "skills", "teams"])
     p_gen.add_argument("--dry-run", action="store_true")
     p_gen.add_argument("--force", action="store_true")
+    p_gen.add_argument("--seniority", default=None,
+                       help="Override agent levels, e.g. "
+                            "'security_engineer=principal,react_developer=senior'.")
+    p_gen.add_argument("--seniority-profile", dest="seniority_profile",
+                       default=None,
+                       help="Named profile from config/seniority_profiles.yaml.")
     p_gen.set_defaults(func=_cmd_generate)
+
+    # doctor (agent-teams readiness)
+    p_doc = sub.add_parser("doctor",
+                           help="Check Claude Code agent-teams readiness.")
+    p_doc.set_defaults(func=_cmd_doctor)
 
     # eval
     p_eval = sub.add_parser("eval", help="Run the prompt-eval matrix.")

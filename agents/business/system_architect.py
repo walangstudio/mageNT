@@ -11,6 +11,8 @@ except ImportError:
 class SystemArchitect(BaseAgent):
     """System Architect specializing in high-level system design."""
 
+    expertise_level = "principal"
+
     @property
     def name(self) -> str:
         return "system_architect"
