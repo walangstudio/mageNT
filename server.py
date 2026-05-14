@@ -86,6 +86,9 @@ from agents.quality.debugging_expert import DebuggingExpert
 from agents.infrastructure.devops_engineer import DevOpsEngineer
 from agents.infrastructure.cloud_architect import CloudArchitect
 
+# Coordination
+from agents.coordination.team_lead import TeamLead
+
 # Map agent names to their classes
 AGENT_CLASSES = {
     # Business
@@ -129,6 +132,8 @@ AGENT_CLASSES = {
     # Infrastructure
     "devops_engineer": DevOpsEngineer,
     "cloud_architect": CloudArchitect,
+    # Coordination
+    "team_lead": TeamLead,
 }
 
 

@@ -11,6 +11,8 @@ except ImportError:
 class DeliveryManager(BaseAgent):
     """Delivery Manager responsible for project completion and readiness sign-off."""
 
+    expertise_level = "principal"
+
     @property
     def name(self) -> str:
         return "delivery_manager"

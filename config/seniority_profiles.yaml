@@ -1,0 +1,43 @@
+# Seniority profile overrides. Read by tools/resolve_seniority.py at install
+# time and baked into generated subagent markdown.
+#
+# Each profile is a mapping of agent_name -> level. Valid levels:
+#   principal | staff | senior | ""   (empty string = no level word)
+#
+# Class defaults (see each agent's `expertise_level = ...` class attribute):
+#   Principal: system_architect, cloud_architect, delivery_manager, product_manager
+#   Staff:     security_engineer, performance_engineer, database_administrator,
+#              devops_engineer, sdet
+#   Senior:    qa_engineer, automation_qa, debugging_expert, api_developer,
+#              fullstack_developer, all framework devs
+#   "" :       business_analyst, technical_writer, ui_ux_designer,
+#              integration_specialist
+#
+# Use `default` (or omit --seniority-profile) for class defaults.
+
+default: {}
+
+# Promote every domain expert to Principal. Useful for teams that want their
+# magent-* teammates to act with strong decision authority.
+principal-heavy:
+  security_engineer: principal
+  performance_engineer: principal
+  database_administrator: principal
+  devops_engineer: principal
+  sdet: principal
+  qa_engineer: staff
+  automation_qa: staff
+  debugging_expert: staff
+
+# Flatten everyone to Senior. Useful when you want consistent voice across
+# agents and don't want Principal-tier verbosity in the body.
+flat-senior:
+  system_architect: senior
+  cloud_architect: senior
+  delivery_manager: senior
+  product_manager: senior
+  security_engineer: senior
+  performance_engineer: senior
+  database_administrator: senior
+  devops_engineer: senior
+  sdet: senior

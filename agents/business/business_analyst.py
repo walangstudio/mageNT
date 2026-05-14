@@ -11,6 +11,8 @@ except ImportError:
 class BusinessAnalyst(BaseAgent):
     """Business Analyst agent specializing in requirements gathering and analysis."""
 
+    expertise_level = ""
+
     @property
     def name(self) -> str:
         return "business_analyst"

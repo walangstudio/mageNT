@@ -69,6 +69,12 @@ agents:
     model: sonnet
     tools: [Read, Grep, Glob, Bash]
 
+  # --- Coordination (Claude Code agent teams) ---
+  team_lead:
+    mode: subagent
+    mcp_fallback: false
+    tools: [Read, Grep, Glob, Bash]
+
   # --- advisory skills (workflow knowledge, not autonomous coders) ---
   business_analyst:
     mode: skill

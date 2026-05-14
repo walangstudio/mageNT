@@ -11,6 +11,8 @@ except ImportError:
 class SecurityEngineer(BaseAgent):
     """Security Engineer specializing in application security and secure coding."""
 
+    expertise_level = "staff"
+
     @property
     def name(self) -> str:
         return "security_engineer"

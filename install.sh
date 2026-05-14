@@ -24,6 +24,7 @@ AGENTS_DIR=""
 SKILLS_DIR=""
 REGENERATE=false
 DRY_RUN=false
+ENABLE_TEAMS="ask"    # ask | yes | no
 
 # ── Parse flags ─────────────────────────────────────────
 show_help() {
@@ -50,6 +51,10 @@ Options:
       --skills-dir D  Override target skills/ directory (Claude Code only)
       --regenerate    Re-run the dispatch generator before installing
       --dry-run       Print actions without writing
+      --enable-teams  Set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 in
+                      ~/.claude/settings.json (Claude Code agent teams)
+      --no-enable-teams
+                      Skip the agent-teams prompt and do not modify settings
   -h, --help          Show this help
 
 Examples:
@@ -90,6 +95,8 @@ while [[ $# -gt 0 ]]; do
         --skills-dir)        SKILLS_DIR="$2"; shift 2 ;;
         --regenerate)        REGENERATE=true; shift ;;
         --dry-run)           DRY_RUN=true; shift ;;
+        --enable-teams)      ENABLE_TEAMS="yes"; shift ;;
+        --no-enable-teams)   ENABLE_TEAMS="no"; shift ;;
         -h|--help)           show_help ;;
         *) echo "Unknown option: $1"; show_help ;;
     esac
@@ -140,7 +147,7 @@ run_dispatch_generator() {
     [[ "$DRY_RUN" == true ]] && extra_args+=("--dry-run")
     [[ "$FORCE" == true ]] && extra_args+=("--force")
     case "$PROFILE" in
-        subagents|skills) extra_args+=("--profile" "$PROFILE") ;;
+        subagents|skills|teams) extra_args+=("--profile" "$PROFILE") ;;
     esac
 
     if [[ "$action" == "uninstall" ]]; then
@@ -150,6 +157,41 @@ run_dispatch_generator() {
         "$venv_py" "$MAGENT_DIR/tools/generate_dispatch.py" \
             --target "$target" "${extra_args[@]}"
     fi
+}
+
+maybe_enable_agent_teams() {
+    # Only relevant when subagents are being installed.
+    local effective_mode="$1"
+    local venv_py="$2"
+    case "$effective_mode" in
+        hybrid|subagents) ;;
+        *) return ;;
+    esac
+    case "$ENABLE_TEAMS" in
+        no)
+            return
+            ;;
+        yes)
+            ;;
+        ask|*)
+            # Skip the prompt in non-interactive runs.
+            if [[ ! -t 0 ]]; then
+                return
+            fi
+            local answer
+            read -rp "  Enable Claude Code agent teams (experimental, requires Claude Code 2.1.32+)? [y/N] " answer >&2
+            case "$answer" in
+                y|Y|yes|YES) ;;
+                *) return ;;
+            esac
+            ;;
+    esac
+    if [[ "$DRY_RUN" == true ]]; then
+        info "Would set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 in ~/.claude/settings.json"
+        return
+    fi
+    "$venv_py" "$MAGENT_DIR/tools/enable_teams.py" || \
+        err "enable_teams.py failed — set the env var manually in ~/.claude/settings.json"
 }
 
 # ── Helpers ─────────────────────────────────────────────
@@ -1217,6 +1259,7 @@ case "$RESOLVED_MODE" in
             DISPATCH_TARGET="$(resolve_dispatch_target)"
             info "Installing subagents/skills into $DISPATCH_TARGET (profile=$PROFILE)"
             run_dispatch_generator "$DISPATCH_TARGET" "generate" "$VENV_PYTHON"
+            maybe_enable_agent_teams "$RESOLVED_MODE" "$VENV_PYTHON"
             echo ""
         fi
         ;;

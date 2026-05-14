@@ -11,6 +11,8 @@ except ImportError:
 class DatabaseAdministrator(BaseAgent):
     """Database Administrator specializing in database design and optimization."""
 
+    expertise_level = "staff"
+
     @property
     def name(self) -> str:
         return "database_administrator"

@@ -18,6 +18,7 @@ set "CLIENT_EXPLICIT=false"
 set "STATUS=false"
 set "MODE=auto"
 set "PROFILE=full"
+set "ENABLE_TEAMS=ask"
 set "SCOPE=ask"
 set "AGENTS_DIR="
 set "SKILLS_DIR="
@@ -93,6 +94,8 @@ if /i "%~1"=="-c"          goto :pf_client
 if /i "%~1"=="--client"    goto :pf_client
 if /i "%~1"=="--mode"        goto :pf_mode
 if /i "%~1"=="--profile"     goto :pf_profile
+if /i "%~1"=="--enable-teams"    ( set "ENABLE_TEAMS=yes" & shift & goto :parse_args )
+if /i "%~1"=="--no-enable-teams" ( set "ENABLE_TEAMS=no"  & shift & goto :parse_args )
 if /i "%~1"=="--scope"       goto :pf_scope
 if /i "%~1"=="--agents-dir"  goto :pf_agents_dir
 if /i "%~1"=="--skills-dir"  goto :pf_skills_dir
@@ -822,6 +825,7 @@ if /i not "!CLIENT!"=="claude" (
 call :resolve_dispatch_target
 echo   Installing subagents/skills into !DISPATCH_TARGET! ^(profile=!PROFILE!^)
 call :run_dispatch_generator "!DISPATCH_TARGET!" generate "!VENV_PYTHON!"
+call :maybe_enable_agent_teams "!RESOLVED_MODE!" "!VENV_PYTHON!"
 echo.
 :skip_dispatch_install
 
@@ -935,11 +939,30 @@ if /i "!DRY_RUN!"=="true" set "_extra=!_extra! --dry-run"
 if /i "!FORCE!"=="true"   set "_extra=!_extra! --force"
 if /i "!PROFILE!"=="subagents" set "_extra=!_extra! --profile subagents"
 if /i "!PROFILE!"=="skills"    set "_extra=!_extra! --profile skills"
+if /i "!PROFILE!"=="teams"     set "_extra=!_extra! --profile teams"
 if /i "!_action!"=="uninstall" (
     "!_pyexe!" "!MAGENT_DIR!\tools\generate_dispatch.py" --target "!_target!" --uninstall !_extra!
 ) else (
     "!_pyexe!" "!MAGENT_DIR!\tools\generate_dispatch.py" --target "!_target!" !_extra!
 )
+goto :eof
+
+rem ════════════════════════════════════════════════════════
+:maybe_enable_agent_teams
+set "_mode=%~1"
+set "_pyexe=%~2"
+if /i not "!_mode!"=="hybrid" if /i not "!_mode!"=="subagents" goto :eof
+if /i "!ENABLE_TEAMS!"=="no" goto :eof
+if /i not "!ENABLE_TEAMS!"=="yes" (
+    set /p "_ans=  Enable Claude Code agent teams (experimental, requires Claude Code 2.1.32+)? [y/N] "
+    if /i not "!_ans!"=="y" if /i not "!_ans!"=="yes" goto :eof
+)
+if /i "!DRY_RUN!"=="true" (
+    echo   Would set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 in %USERPROFILE%\.claude\settings.json
+    goto :eof
+)
+"!_pyexe!" "!MAGENT_DIR!\tools\enable_teams.py"
+if errorlevel 1 echo   WARNING: enable_teams.py failed; set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 manually.
 goto :eof
 
 rem ════════════════════════════════════════════════════════
