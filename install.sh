@@ -45,7 +45,7 @@ Options:
       --skip-test     Skip test_server.py validation
       --mode MODE     auto|mcp|skills|subagents|hybrid (default: auto;
                       claude→hybrid, others→mcp)
-      --profile P     full|minimal|skills|subagents (default: full)
+      --profile P     full|minimal|skills|subagents|teams (default: full)
       --scope S       ask|user|project (Claude Code only; default: ask)
       --agents-dir D  Override target agents/ directory (Claude Code only)
       --skills-dir D  Override target skills/ directory (Claude Code only)
