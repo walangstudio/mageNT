@@ -156,7 +156,11 @@ Register it in `~/.pi/agent/settings.json`:
       --skip-test     Skip server validation
       --mode MODE     auto|mcp|skills|subagents|hybrid (default: auto;
                       claude→hybrid, others→mcp)
-      --profile P     full|minimal|skills|subagents (default: full)
+      --profile P     full|minimal|skills|subagents|teams (default: full)
+      --enable-teams  Set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 in
+                      ~/.claude/settings.json (Claude Code agent teams)
+      --no-enable-teams
+                      Skip the agent-teams prompt
       --scope S       ask|user|project (Claude Code only; default: ask)
       --agents-dir D  Override target agents/ directory (Claude Code only)
       --skills-dir D  Override target skills/ directory (Claude Code only)
@@ -167,13 +171,49 @@ Register it in `~/.pi/agent/settings.json`:
 
 ### Subagents + Skills (Claude Code only)
 
-On Claude Code, the default `--mode auto` resolves to **`hybrid`**: review/audit personas (security_engineer, system_architect, delivery_manager, etc.) install as native subagents under `~/.claude/agents/magent-*.md`; scaffold helpers (react, nextjs, fastapi, express) and lightweight workflow tools install as skills under `~/.claude/skills/magent-*/SKILL.md`; the MCP server stays installed as a fallback for stateful tools (workflows, specs, recall, parallel orchestration). Other clients still get the standard MCP-only install.
+On Claude Code, the default `--mode auto` resolves to **`hybrid`**: review/audit personas (security_engineer, system_architect, delivery_manager, etc.) install as native subagents under `~/.claude/agents/magent-*.md`; scaffold helpers (react, nextjs, fastapi, express) and lightweight workflow tools install as skills under `~/.claude/skills/magent-*/SKILL.md`; the MCP server stays installed for stateful tools (workflows, specs, recall, parallel orchestration). Other clients still get the standard MCP-only install.
 
 Per-agent dispatch lives in [`config/dispatch.yaml`](config/dispatch.yaml). Markdown is generated from the Python agent classes by [`tools/generate_dispatch.py`](tools/generate_dispatch.py); a SHA-tracked manifest at `~/.claude/.magent-manifest.json` lets `--upgrade` and `--uninstall` skip files you've edited by hand.
 
+#### `--mode` vs `--profile`
+
+`--mode` decides **which delivery channels** mageNT uses; `--profile` decides **which files** get rendered into the subagent/skill channels. They compose.
+
+| `--mode` | MCP server registered | Subagent/skill files written |
+|---|---|---|
+| `mcp` | ✅ | ❌ |
+| `subagents` | ❌ | ✅ (filtered by `--profile`) |
+| `skills` | ❌ | ✅ (filtered by `--profile`) |
+| `hybrid` (default for `-c claude`) | ✅ | ✅ (filtered by `--profile`) |
+
+`--mode subagents` and `--mode skills` are the same code path — both invoke the dispatch generator without registering MCP. Pick whichever name reads better; use `--profile` to constrain the output.
+
+| `--profile` | What it emits |
+|---|---|
+| `full` (default) | Both subagents AND skills per dispatch.yaml |
+| `subagents` | Only the 11 agents marked `subagent` in dispatch.yaml |
+| `skills` | Only the 4 agents marked `skill` + the 10 scaffold/test/debug skills |
+| `teams` | All 37 agents as subagents (for agent-teams use) |
+
+#### What you lose by skipping MCP
+
+If you install with `--mode subagents` or `--mode skills` (no MCP), you keep all 37 subagents and the standalone scaffold/test/debug skills, but you lose:
+
+- The full **spec pipeline**: `magent_constitution → magent_spec → magent_clarify → magent_plan → magent_tasks → magent_implement → magent_audit → magent_release`. The `/magent-spec` etc. slash-command wrappers exist as skill files but their bodies invoke MCP tools — without MCP they're dead pointers.
+- **`run_parallel_agents`** (concurrent agent orchestration with skill-affinity auto-selection)
+- **`recall`** (cross-conversation memory)
+- **Workflows** (`tdd`, etc.)
+- **`consult_<agent>`** MCP tools (subagents cover the same agents via a different invocation path, so this is just stylistic)
+
+For pure agent-teams use, dropping MCP is fine. For the spec-driven pipeline or parallel orchestration, keep `--mode hybrid`.
+
 ```bash
-./install.sh -c claude                       # auto → hybrid (subagents + skills + MCP fallback)
-./install.sh -c claude --mode mcp            # force MCP-only on Claude Code
+./install.sh -c claude                       # auto → hybrid (subagents + skills + MCP)
+./install.sh -c claude --mode mcp            # MCP only (no subagent/skill files)
+./install.sh -c claude --mode subagents --profile teams --enable-teams
+                                             # Pure agent-teams setup, no MCP
+./install.sh -c claude --mode hybrid --profile teams --enable-teams
+                                             # Everything + agent teams (recommended)
 ./install.sh -c claude --scope project       # write to <workspace>/.claude/ instead of ~/.claude/
 ./install.sh -c claude --regenerate          # re-render markdown before install
 ./install.sh -c claude --dry-run             # preview actions without writing
