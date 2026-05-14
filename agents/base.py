@@ -17,6 +17,10 @@ class BaseAgent(ABC):
     Agents provide system prompts that guide Claude's responses.
     """
 
+    # Class-level default; subclasses override per the seniority table.
+    # Values: "principal", "staff", "senior", "" (empty = no level word in role line)
+    expertise_level: str = "senior"
+
     def __init__(self, config: Dict[str, Any]):
         """Initialize the agent.
 
@@ -24,9 +28,24 @@ class BaseAgent(ABC):
             config: Agent configuration from config.yaml
         """
         self.config = config
-        self.expertise_level = config.get('expertise_level', 'senior')
+        if 'expertise_level' in config:
+            self.expertise_level = config['expertise_level']
         self.specialization = config.get('specialization', '')
         self.enabled = config.get('enabled', True)
+
+    @property
+    def team_model(self) -> str:
+        """Claude model alias for Claude Code agent-team teammate spawning.
+
+        Read by tools/generate_dispatch.py to emit the frontmatter `model:`
+        field. Inert outside agent-teams context.
+        """
+        return {
+            "principal": "opus",
+            "staff": "opus",
+            "senior": "sonnet",
+            "": "sonnet",
+        }.get(self.expertise_level, "sonnet")
 
     @property
     @abstractmethod

@@ -11,6 +11,8 @@ except ImportError:
 class PerformanceEngineer(BaseAgent):
     """Performance Engineer specializing in application optimization."""
 
+    expertise_level = "staff"
+
     @property
     def name(self) -> str:
         return "performance_engineer"

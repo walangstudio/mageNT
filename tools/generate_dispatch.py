@@ -27,9 +27,20 @@ if REPO_ROOT not in sys.path:
 import yaml  # noqa: E402  (after sys.path manipulation)
 
 from tools import dispatch_manifest as manifest  # noqa: E402
+from tools import resolve_seniority  # noqa: E402
 
 CONFIG_PATH = os.path.join(REPO_ROOT, "config", "dispatch.yaml")
 MAX_DESCRIPTION_LEN = 1024
+
+TEAM_CONTEXT_BLOCK = (
+    "## Team Context\n"
+    "If you are running as a teammate in a Claude Code agent team "
+    "(experimental, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), the "
+    "`SendMessage` and task-management tools are always available regardless "
+    "of the `tools:` allowlist above. Coordinate with named teammates by "
+    "message; claim and complete tasks from the shared task list; defer "
+    "scope you do not own to the right specialist by name."
+)
 
 
 def load_config(path: str = CONFIG_PATH) -> Dict[str, Any]:
@@ -68,9 +79,31 @@ def load_skill_classes() -> Dict[str, type]:
     }
 
 
-def _instantiate_agent(cls: type) -> Any:
-    spec = (cls.__doc__ or "").strip().splitlines()[0] if cls.__doc__ else ""
-    return cls({"expertise_level": "principal", "specialization": spec})
+def _instantiate_agent(
+    cls: type,
+    name: str = "",
+    *,
+    cli_overrides: Optional[Dict[str, str]] = None,
+    profile: Optional[str] = None,
+) -> Any:
+    """Instantiate an agent with its resolved seniority level.
+
+    Class-level ``expertise_level`` provides the default. The resolver may
+    override it via CLI flag, project config, user config, or named profile.
+    The class docstring is no longer injected as ``specialization`` — the
+    body already carries the stance and scope; restating the role in the
+    role line caused the "You are a Principal X, X specializing in..."
+    duplication seen in older installs.
+    """
+    class_default = getattr(cls, "expertise_level", "senior")
+    if name:
+        level = resolve_seniority.resolve(
+            name, class_default,
+            cli_overrides=cli_overrides, profile=profile,
+        )
+    else:
+        level = class_default
+    return cls({"expertise_level": level})
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -84,8 +117,17 @@ def _yaml_list(items: List[str]) -> str:
     return "[" + ", ".join(items) + "]"
 
 
-def render_subagent(name: str, cls: type, spec: Dict[str, Any]) -> str:
-    agent = _instantiate_agent(cls)
+def render_subagent(
+    name: str,
+    cls: type,
+    spec: Dict[str, Any],
+    *,
+    cli_overrides: Optional[Dict[str, str]] = None,
+    profile: Optional[str] = None,
+) -> str:
+    agent = _instantiate_agent(
+        cls, name, cli_overrides=cli_overrides, profile=profile,
+    )
     role = agent.role
     use_cases = agent.use_cases or []
     triggers = "; ".join(use_cases[:3]) or role
@@ -95,9 +137,13 @@ def render_subagent(name: str, cls: type, spec: Dict[str, Any]) -> str:
         MAX_DESCRIPTION_LEN,
     )
     tools = spec.get("tools") or ["Read", "Grep", "Glob", "Bash"]
-    model = spec.get("model", "sonnet")
+    # team_model drives the frontmatter `model:` field, which Claude Code
+    # reads when spawning this subagent as an agent-teams teammate.
+    # `spec.model` (dispatch.yaml) wins if explicitly set.
+    model = spec.get("model") or getattr(agent, "team_model", "sonnet")
 
-    body = agent.get_system_prompt()
+    body = agent.get_system_prompt().rstrip()
+    body_with_team = body + "\n\n" + TEAM_CONTEXT_BLOCK
 
     front = [
         "---",
@@ -107,7 +153,7 @@ def render_subagent(name: str, cls: type, spec: Dict[str, Any]) -> str:
         f"model: {model}",
         "---",
     ]
-    return "\n".join(front) + "\n\n" + body.rstrip() + "\n"
+    return "\n".join(front) + "\n\n" + body_with_team + "\n"
 
 
 def render_skill_from_agent(name: str, cls: type, spec: Dict[str, Any]) -> str:
@@ -275,8 +321,19 @@ def render_skill_passthrough(name: str, spec: Dict[str, Any]) -> str:
 def plan_files(
     config: Dict[str, Any],
     only_modes: Optional[List[str]] = None,
+    *,
+    cli_overrides: Optional[Dict[str, str]] = None,
+    seniority_profile: Optional[str] = None,
+    teams_mode: bool = False,
 ) -> List[Tuple[str, str, str]]:
-    """Return a list of ``(rel_path, content, kind)`` tuples to write."""
+    """Return a list of ``(rel_path, content, kind)`` tuples to write.
+
+    When ``teams_mode`` is True, every registered agent is emitted as a
+    subagent regardless of its dispatch.yaml ``mode``. This is what the
+    Claude Code agent-teams feature needs — teammates are spawned by
+    subagent type, so every agent that might be referenced by a team
+    preset must exist at ``~/.claude/agents/magent-*.md``.
+    """
     agents_cfg = (config.get("agents") or {})
     skills_cfg = (config.get("skills") or {})
     agent_classes = load_agent_classes()
@@ -286,16 +343,24 @@ def plan_files(
 
     for name, cls in agent_classes.items():
         spec = agents_cfg.get(name) or {"mode": "mcp_only"}
-        mode = spec.get("mode", "mcp_only")
-        if only_modes and mode not in only_modes:
+        if teams_mode:
+            # Promote every agent to subagent for team-spawn coverage.
+            effective_mode = "subagent"
+        else:
+            effective_mode = spec.get("mode", "mcp_only")
+        if only_modes and effective_mode not in only_modes:
             continue
-        if mode == "subagent":
+        if effective_mode == "subagent":
             files.append((
                 f"agents/magent-{name}.md",
-                render_subagent(name, cls, spec),
+                render_subagent(
+                    name, cls, spec,
+                    cli_overrides=cli_overrides,
+                    profile=seniority_profile,
+                ),
                 "subagent",
             ))
-        elif mode == "skill":
+        elif effective_mode == "skill":
             files.append((
                 f"skills/magent-{name}/SKILL.md",
                 render_skill_from_agent(name, cls, spec),
@@ -352,7 +417,21 @@ def cmd_generate(args: argparse.Namespace) -> int:
     elif args.profile == "skills":
         only_modes = ["skill"]
 
-    plan = plan_files(config, only_modes=only_modes)
+    cli_overrides = resolve_seniority.parse_cli_overrides(
+        getattr(args, "seniority", None),
+    )
+    seniority_profile = getattr(args, "seniority_profile", None)
+    teams_mode = args.profile == "teams"
+    if teams_mode:
+        only_modes = ["subagent"]
+
+    plan = plan_files(
+        config,
+        only_modes=only_modes,
+        cli_overrides=cli_overrides,
+        seniority_profile=seniority_profile,
+        teams_mode=teams_mode,
+    )
 
     existing = manifest.load(target)
     fresh: Dict[str, str] = {}
@@ -413,13 +492,29 @@ def build_parser() -> argparse.ArgumentParser:
         "--config", default=CONFIG_PATH,
         help="Path to dispatch.yaml (default: config/dispatch.yaml).",
     )
-    p.add_argument("--profile", choices=["full", "subagents", "skills"], default="full")
+    p.add_argument(
+        "--profile",
+        choices=["full", "subagents", "skills", "teams"],
+        default="full",
+        help="`teams` emits every registered agent as a subagent so Claude "
+             "Code agent teams have a complete roster.",
+    )
     p.add_argument("--dry-run", action="store_true",
                    help="Print actions without writing or deleting.")
     p.add_argument("--force", action="store_true",
                    help="Overwrite user-edited files / remove user-edited files on uninstall.")
     p.add_argument("--uninstall", action="store_true",
                    help="Remove files tracked in the manifest.")
+    p.add_argument(
+        "--seniority", default=None,
+        help="Per-agent level overrides, e.g. "
+             "'security_engineer=principal,react_developer=senior'.",
+    )
+    p.add_argument(
+        "--seniority-profile", dest="seniority_profile", default=None,
+        help="Named profile from config/seniority_profiles.yaml "
+             "(default, principal-heavy, flat-senior).",
+    )
     return p
 
 
