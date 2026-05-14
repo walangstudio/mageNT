@@ -11,6 +11,8 @@ except ImportError:
 class CloudArchitect(BaseAgent):
     """Cloud Architect specializing in cloud infrastructure and services."""
 
+    expertise_level = "principal"
+
     @property
     def name(self) -> str:
         return "cloud_architect"

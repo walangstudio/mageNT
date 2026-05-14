@@ -11,6 +11,8 @@ except ImportError:
 class UIUXDesigner(BaseAgent):
     """UI/UX Designer specializing in user experience and interface design."""
 
+    expertise_level = ""
+
     @property
     def name(self) -> str:
         return "ui_ux_designer"

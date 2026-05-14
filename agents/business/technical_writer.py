@@ -11,6 +11,8 @@ except ImportError:
 class TechnicalWriter(BaseAgent):
     """Technical Writer specializing in documentation and technical communication."""
 
+    expertise_level = ""
+
     @property
     def name(self) -> str:
         return "technical_writer"
