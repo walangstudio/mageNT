@@ -44,7 +44,7 @@ echo       --global        Write to global config path (claude, cursor, gemini,
 echo                       codex, opencode, all)
 echo       --skip-test     Skip test_server.py validation
 echo       --mode MODE     auto^|mcp^|skills^|subagents^|hybrid (default: auto)
-echo       --profile P     full^|minimal^|skills^|subagents (default: full)
+echo       --profile P     full^|minimal^|skills^|subagents^|teams (default: full)
 echo       --scope S       ask^|user^|project (Claude Code; default: ask)
 echo       --agents-dir D  Override target agents/ directory (Claude Code)
 echo       --skills-dir D  Override target skills/ directory (Claude Code)
