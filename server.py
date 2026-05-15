@@ -70,6 +70,7 @@ from agents.development.ios_developer import IOSDeveloper
 from agents.development.php_developer import PHPDeveloper
 from agents.development.tui_developer import TUIDeveloper
 from agents.development.cli_installer_developer import CLIInstallerDeveloper
+from agents.development.hono_developer import HonoDeveloper
 
 # Data agents
 from agents.data.database_administrator import DatabaseAdministrator
@@ -85,6 +86,7 @@ from agents.quality.debugging_expert import DebuggingExpert
 # Infrastructure agents
 from agents.infrastructure.devops_engineer import DevOpsEngineer
 from agents.infrastructure.cloud_architect import CloudArchitect
+from agents.infrastructure.cloudflare_expert import CloudflareExpert
 
 # Coordination
 from agents.coordination.team_lead import TeamLead
@@ -120,6 +122,7 @@ AGENT_CLASSES = {
     "php_developer": PHPDeveloper,
     "tui_developer": TUIDeveloper,
     "cli_installer_developer": CLIInstallerDeveloper,
+    "hono_developer": HonoDeveloper,
     # Data
     "database_administrator": DatabaseAdministrator,
     # Quality
@@ -132,6 +135,7 @@ AGENT_CLASSES = {
     # Infrastructure
     "devops_engineer": DevOpsEngineer,
     "cloud_architect": CloudArchitect,
+    "cloudflare_expert": CloudflareExpert,
     # Coordination
     "team_lead": TeamLead,
 }
