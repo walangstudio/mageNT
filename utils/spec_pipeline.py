@@ -435,3 +435,375 @@ def generate_failing_test_for_task(
             elif text.lower().startswith("python"):
                 text = text[6:].lstrip()
     return text, usage
+
+
+# ----- Coordinator: team synthesis ----------------------------------------
+
+try:
+    from agents.schemas import (
+        SynthesisReport, TeamComposition, PlanApproval, RetaskDelta,
+    )  # noqa: E402
+except ImportError:  # pragma: no cover
+    from ..agents.schemas import (
+        SynthesisReport, TeamComposition, PlanApproval, RetaskDelta,
+    )  # type: ignore
+
+
+def run_team_synthesize(
+    task_outputs: List[Dict[str, Any]],
+    phase_name: str = "",
+    agent_registry: Optional[Dict[str, Any]] = None,
+    llm_call: Callable[..., Tuple[str, Dict[str, Any]]] = _default_llm_call,
+) -> Tuple[SynthesisReport, str, Dict[str, Any]]:
+    """Merge a set of teammate outputs into a single SynthesisReport.
+
+    ``task_outputs`` is a list of dicts shaped
+    ``{"name": str, "agent_type": str, "output": str}``. The synthesizer is
+    `delivery_manager` (Pydantic v2 + Phase 6 prompt v2). Schema validation
+    retries up to RETRY_BUDGET times before giving up.
+
+    Returns ``(SynthesisReport, raw_text, usage_dict)``. The raw text is the
+    last LLM response, useful for debugging when validation fails.
+    """
+    if not task_outputs:
+        raise ValueError("run_team_synthesize requires at least one task output")
+
+    schema_dict = SynthesisReport.model_json_schema()
+    schema_name = "SynthesisReport"
+
+    role = "Delivery Manager"
+    stance = ""
+    if agent_registry and "delivery_manager" in agent_registry:
+        agent = agent_registry["delivery_manager"]
+        if isinstance(agent, type):
+            agent = agent({"expertise_level": "principal"})
+        try:
+            stance = agent.opinionated_stance or ""
+            if hasattr(agent, "role"):
+                role = f"{agent.expertise_level.capitalize()} {agent.role}"
+        except Exception:
+            stance = ""
+
+    system_prompt = (
+        f"You are a {role}. {stance}\n\n"
+        f"Synthesize the teammate outputs below into a single {schema_name} "
+        f"JSON instance. Surface dissenting views explicitly when teammates "
+        f"disagree — name who said what. Pick the smallest viable next "
+        f"actions. JSON only — no prose, no code fences."
+    )
+
+    outputs_block = []
+    for o in task_outputs:
+        name = o.get("name", "?")
+        agent_type = o.get("agent_type", "?")
+        body = (o.get("output") or "").strip()
+        if len(body) > 3000:
+            body = body[:3000] + "…[truncated]"
+        outputs_block.append(f"### Teammate `{name}` ({agent_type})\n{body}")
+
+    phase_line = f" for phase `{phase_name}`" if phase_name else ""
+    user_task = (
+        f"Synthesize these teammate outputs{phase_line}:\n\n"
+        + "\n\n".join(outputs_block)
+    )
+
+    last_err = ""
+    raw = ""
+    usage: Dict[str, Any] = {}
+    for attempt in range(1, RETRY_BUDGET + 1):
+        raw, usage = llm_call(
+            "delivery_manager",
+            system_prompt,
+            user_task,
+            None,
+            response_schema=schema_dict,
+            schema_name=schema_name,
+        )
+        if _extract_json is not None:
+            blob = _extract_json(raw) or raw
+        else:
+            blob = raw
+        try:
+            model = SynthesisReport.model_validate_json(blob)
+            return model, raw, usage
+        except Exception as e:
+            last_err = str(e)[:600]
+            user_task = (
+                f"Your previous response failed schema validation:\n"
+                f"  {last_err}\n\n"
+                "Emit a valid SynthesisReport JSON instance now.\n\n"
+                + user_task
+            )
+
+    raise PhaseEscalation(
+        spec_id="<team>", kind="team_synthesis",
+        last_error=last_err, attempts=RETRY_BUDGET,
+    )
+
+
+def run_team_compose(
+    brief: str,
+    project_context: Optional[str] = None,
+    available_agent_types: Optional[List[str]] = None,
+    max_teammates: int = 5,
+    agent_registry: Optional[Dict[str, Any]] = None,
+    llm_call: Callable[..., Tuple[str, Dict[str, Any]]] = _default_llm_call,
+) -> Tuple[TeamComposition, str, Dict[str, Any]]:
+    """Turn a fuzzy human brief into a schema-validated TeamComposition.
+
+    Driven by `team_lead`. The composition lists 1..max_teammates teammates
+    (each with name, agent_type from the validated literal, framed prompt,
+    optional files scope + model). Schema validation retries up to
+    RETRY_BUDGET times before giving up.
+    """
+    if not brief or not brief.strip():
+        raise ValueError("run_team_compose requires a non-empty brief")
+
+    schema_dict = TeamComposition.model_json_schema()
+    schema_name = "TeamComposition"
+
+    role = "Team Lead"
+    stance = ""
+    if agent_registry and "team_lead" in agent_registry:
+        agent = agent_registry["team_lead"]
+        if isinstance(agent, type):
+            agent = agent({"expertise_level": "principal"})
+        try:
+            stance = agent.opinionated_stance or ""
+            if hasattr(agent, "role"):
+                role = f"{agent.expertise_level.capitalize()} {agent.role}"
+        except Exception:
+            stance = ""
+
+    agent_types_block = (
+        "\n".join(f"  - {t}" for t in available_agent_types)
+        if available_agent_types
+        else "(all magent specialist agent_types accepted)"
+    )
+
+    system_prompt = (
+        f"You are a {role}. {stance}\n\n"
+        f"Decompose the user's brief into a {schema_name} JSON instance: "
+        f"pick the smallest team (1..{max_teammates} teammates) that covers "
+        f"the brief without overlap. Each teammate gets a directive prompt "
+        f"framed at their specialty. Avoid duplicate specialists. JSON only "
+        f"— no prose, no code fences."
+    )
+
+    user_task_parts = [f"Brief: {brief.strip()}"]
+    if project_context:
+        user_task_parts.append(f"\nProject context (optional):\n{project_context.strip()[:2000]}")
+    user_task_parts.append(f"\nAllowed agent_type values:\n{agent_types_block}")
+    user_task = "\n".join(user_task_parts)
+
+    last_err = ""
+    raw = ""
+    usage: Dict[str, Any] = {}
+    for attempt in range(1, RETRY_BUDGET + 1):
+        raw, usage = llm_call(
+            "team_lead",
+            system_prompt,
+            user_task,
+            None,
+            response_schema=schema_dict,
+            schema_name=schema_name,
+        )
+        if _extract_json is not None:
+            blob = _extract_json(raw) or raw
+        else:
+            blob = raw
+        try:
+            model = TeamComposition.model_validate_json(blob)
+            return model, raw, usage
+        except Exception as e:
+            last_err = str(e)[:600]
+            user_task = (
+                f"Your previous response failed schema validation:\n"
+                f"  {last_err}\n\n"
+                "Emit a valid TeamComposition JSON instance now.\n\n"
+                + user_task
+            )
+
+    raise PhaseEscalation(
+        spec_id="<team>", kind="team_composition",
+        last_error=last_err, attempts=RETRY_BUDGET,
+    )
+
+
+def run_plan_approve(
+    plan_markdown: str,
+    approval_criteria: str = "",
+    reviewer_agent: str = "system_architect",
+    agent_registry: Optional[Dict[str, Any]] = None,
+    llm_call: Callable[..., Tuple[str, Dict[str, Any]]] = _default_llm_call,
+) -> Tuple[PlanApproval, str, Dict[str, Any]]:
+    """Judge a teammate's plan-mode plan against the supplied criteria.
+
+    Default reviewer is `system_architect`. Switch to `delivery_manager`
+    when criteria are release/process-shaped rather than architecture-shaped.
+    Schema validation retries up to RETRY_BUDGET times.
+    """
+    if not plan_markdown or not plan_markdown.strip():
+        raise ValueError("run_plan_approve requires non-empty plan_markdown")
+
+    if reviewer_agent not in ("system_architect", "delivery_manager"):
+        raise ValueError(
+            f"reviewer_agent must be 'system_architect' or 'delivery_manager', "
+            f"got {reviewer_agent!r}"
+        )
+
+    schema_dict = PlanApproval.model_json_schema()
+    schema_name = "PlanApproval"
+
+    role_default = "Principal System Architect" if reviewer_agent == "system_architect" else "Principal Delivery Manager"
+    role = role_default
+    stance = ""
+    if agent_registry and reviewer_agent in agent_registry:
+        agent = agent_registry[reviewer_agent]
+        if isinstance(agent, type):
+            agent = agent({"expertise_level": "principal"})
+        try:
+            stance = agent.opinionated_stance or ""
+            if hasattr(agent, "role"):
+                role = f"{agent.expertise_level.capitalize()} {agent.role}"
+        except Exception:
+            stance = ""
+
+    system_prompt = (
+        f"You are a {role}. {stance}\n\n"
+        f"Judge the plan below against the approval criteria. Approve only "
+        f"when the plan demonstrably satisfies every criterion. When you "
+        f"reject, the feedback must be specific enough that the teammate can "
+        f"act on it directly. List blocking_concerns separately from "
+        f"optional_suggestions — only blockers gate approval. JSON only — "
+        f"emit a single {schema_name} instance; no prose, no fences."
+    )
+
+    criteria_block = approval_criteria.strip() if approval_criteria else (
+        "(none specified — apply the reviewer's defaults: correctness, "
+        "scope discipline, test coverage, observable behaviour rather than "
+        "implementation detail.)"
+    )
+
+    user_task = (
+        f"Approval criteria:\n{criteria_block}\n\n"
+        f"Plan under review:\n{plan_markdown.strip()[:8000]}"
+    )
+
+    last_err = ""
+    raw = ""
+    usage: Dict[str, Any] = {}
+    for attempt in range(1, RETRY_BUDGET + 1):
+        raw, usage = llm_call(
+            reviewer_agent,
+            system_prompt,
+            user_task,
+            None,
+            response_schema=schema_dict,
+            schema_name=schema_name,
+        )
+        if _extract_json is not None:
+            blob = _extract_json(raw) or raw
+        else:
+            blob = raw
+        try:
+            model = PlanApproval.model_validate_json(blob)
+            return model, raw, usage
+        except Exception as e:
+            last_err = str(e)[:600]
+            user_task = (
+                f"Your previous response failed schema validation:\n"
+                f"  {last_err}\n\n"
+                "Emit a valid PlanApproval JSON instance now.\n\n"
+                + user_task
+            )
+
+    raise PhaseEscalation(
+        spec_id="<team>", kind="plan_approval",
+        last_error=last_err, attempts=RETRY_BUDGET,
+    )
+
+
+def run_team_retask(
+    current_team_state: str,
+    new_evidence: str,
+    agent_registry: Optional[Dict[str, Any]] = None,
+    llm_call: Callable[..., Tuple[str, Dict[str, Any]]] = _default_llm_call,
+) -> Tuple[RetaskDelta, str, Dict[str, Any]]:
+    """Decide whether the running team needs to change in response to new
+    evidence. Driven by `team_lead`. Output is a delta: add / modify / drop
+    teammates. Empty lists across the board means "no change" and Brain
+    treats it as a no-op. Retries up to RETRY_BUDGET times.
+
+    ``current_team_state`` is a free-form-ish string built by the caller —
+    typically a short summary of each live teammate's name, role, scope,
+    and last-known status. ``new_evidence`` is the surfaced finding that
+    might invalidate or reshape the current plan.
+    """
+    if not new_evidence or not new_evidence.strip():
+        raise ValueError("run_team_retask requires non-empty new_evidence")
+
+    schema_dict = RetaskDelta.model_json_schema()
+    schema_name = "RetaskDelta"
+
+    role = "Team Lead"
+    stance = ""
+    if agent_registry and "team_lead" in agent_registry:
+        agent = agent_registry["team_lead"]
+        if isinstance(agent, type):
+            agent = agent({"expertise_level": "principal"})
+        try:
+            stance = agent.opinionated_stance or ""
+            if hasattr(agent, "role"):
+                role = f"{agent.expertise_level.capitalize()} {agent.role}"
+        except Exception:
+            stance = ""
+
+    system_prompt = (
+        f"You are a {role}. {stance}\n\n"
+        f"Given the live team state and surfaced evidence, emit a "
+        f"{schema_name} JSON instance describing what changes (if any) the "
+        f"team needs now. Prefer modifying an existing teammate's prompt "
+        f"over adding new teammates. Drop a teammate only when the evidence "
+        f"makes their entire scope obsolete. When no change is warranted, "
+        f"return all-empty lists with a rationale explaining why the "
+        f"current team is still correct. JSON only — no prose, no fences."
+    )
+
+    user_task = (
+        f"Current team state:\n{current_team_state.strip()[:3000]}\n\n"
+        f"New evidence:\n{new_evidence.strip()[:3000]}"
+    )
+
+    last_err = ""
+    raw = ""
+    usage: Dict[str, Any] = {}
+    for attempt in range(1, RETRY_BUDGET + 1):
+        raw, usage = llm_call(
+            "team_lead",
+            system_prompt,
+            user_task,
+            None,
+            response_schema=schema_dict,
+            schema_name=schema_name,
+        )
+        if _extract_json is not None:
+            blob = _extract_json(raw) or raw
+        else:
+            blob = raw
+        try:
+            model = RetaskDelta.model_validate_json(blob)
+            return model, raw, usage
+        except Exception as e:
+            last_err = str(e)[:600]
+            user_task = (
+                f"Your previous response failed schema validation:\n"
+                f"  {last_err}\n\n"
+                "Emit a valid RetaskDelta JSON instance now.\n\n"
+                + user_task
+            )
+
+    raise PhaseEscalation(
+        spec_id="<team>", kind="retask_delta",
+        last_error=last_err, attempts=RETRY_BUDGET,
+    )
