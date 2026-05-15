@@ -32,15 +32,38 @@ from tools import resolve_seniority  # noqa: E402
 CONFIG_PATH = os.path.join(REPO_ROOT, "config", "dispatch.yaml")
 MAX_DESCRIPTION_LEN = 1024
 
-TEAM_CONTEXT_BLOCK = (
-    "## Team Context\n"
-    "If you are running as a teammate in a Claude Code agent team "
-    "(experimental, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), the "
-    "`SendMessage` and task-management tools are always available regardless "
-    "of the `tools:` allowlist above. Coordinate with named teammates by "
-    "message; claim and complete tasks from the shared task list; defer "
-    "scope you do not own to the right specialist by name."
-)
+TEAM_CONTEXT_BLOCK = """## Team Context (Claude Code agent teams)
+
+This section applies ONLY when you run as a teammate in a Claude Code agent
+team (env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1). Outside a team — invoked as
+an MCP tool, a one-shot subagent, or by borch — the JSON-only rule in the
+`## Output` section above stands unchanged: emit JSON only, nothing else.
+
+In a team you are a SEPARATE session. The lead does NOT receive your final
+message or transcript. If you only emit JSON you have delivered nothing — the
+lead sees an idle teammate with no result. You must actively report.
+
+When and only when you are a team teammate:
+
+1. Produce the JSON artifact EXACTLY as the `## Output` / `<output_schema>`
+   section requires. The JSON is still the contract; downstream code parses it.
+2. Call `SendMessage` to the lead (or the teammate who requested the work, by
+   name) with a clear PROSE report of your verdict/findings — root cause,
+   decision, or recommendation in plain text the lead can act on. The "emit
+   JSON only — no prose, no code fence" rule from `## Output` does NOT apply to
+   a teammate message; lead with prose. Append the JSON artifact after the
+   prose ONLY when told a downstream skill will parse your output. Never send a
+   bare JSON object or a structured status blob as a message — the team
+   framework rejects those.
+3. If you took the task from the shared task list, claim it before starting and
+   call `TaskUpdate` to mark it complete (with a short result note) when you
+   send findings. Never go idle without a TaskUpdate.
+4. Anything outside your owned scope: do NOT attempt it. SendMessage the right
+   specialist by name, stating what you hand off and why.
+
+`SendMessage` and the task-management tools are always available to a teammate
+regardless of the `tools:` frontmatter allowlist — their absence never blocks
+this protocol."""
 
 
 def load_config(path: str = CONFIG_PATH) -> Dict[str, Any]:
@@ -117,6 +140,23 @@ def _yaml_list(items: List[str]) -> str:
     return "[" + ", ".join(items) + "]"
 
 
+def _csv_list(items: List[str]) -> str:
+    return ", ".join(items)
+
+
+# Teams-mode: these stay read-only (review/audit/coordination/advisory).
+# Everyone else — architects, analysts, devops, technical_writer, and every
+# developer — gets Edit/Write so a spawned team can actually build. This
+# classification is authoritative ONLY under --profile teams and overrides
+# the per-agent `tools:` allowlist in dispatch.yaml there.
+TEAMS_READONLY_AGENTS = {
+    "security_engineer", "qa_engineer", "automation_qa", "sdet",
+    "performance_engineer", "debugging_expert",
+    "team_lead",
+    "business_analyst", "product_manager", "ui_ux_designer",
+}
+
+
 def render_subagent(
     name: str,
     cls: type,
@@ -124,6 +164,7 @@ def render_subagent(
     *,
     cli_overrides: Optional[Dict[str, str]] = None,
     profile: Optional[str] = None,
+    teams_mode: bool = False,
 ) -> str:
     agent = _instantiate_agent(
         cls, name, cli_overrides=cli_overrides, profile=profile,
@@ -136,7 +177,15 @@ def render_subagent(
         f"{role} — use proactively for {triggers}. {stance}".strip(),
         MAX_DESCRIPTION_LEN,
     )
-    tools = spec.get("tools") or ["Read", "Grep", "Glob", "Bash"]
+    if teams_mode:
+        # Teams mode: classification is authoritative and overrides the
+        # dispatch.yaml `tools:` allowlist so spawned teammates can build.
+        if name in TEAMS_READONLY_AGENTS:
+            tools = ["Read", "Grep", "Glob", "Bash"]
+        else:
+            tools = ["Read", "Grep", "Glob", "Bash", "Edit", "Write"]
+    else:
+        tools = spec.get("tools") or ["Read", "Grep", "Glob", "Bash"]
     # team_model drives the frontmatter `model:` field, which Claude Code
     # reads when spawning this subagent as an agent-teams teammate.
     # `spec.model` (dispatch.yaml) wins if explicitly set.
@@ -149,7 +198,10 @@ def render_subagent(
         "---",
         f"name: magent-{name}",
         f"description: {description}",
-        f"tools: {_yaml_list(tools)}",
+    ]
+    if tools:
+        front.append(f"tools: {_csv_list(tools)}")
+    front += [
         f"model: {model}",
         "---",
     ]
@@ -357,6 +409,7 @@ def plan_files(
                     name, cls, spec,
                     cli_overrides=cli_overrides,
                     profile=seniority_profile,
+                    teams_mode=teams_mode,
                 ),
                 "subagent",
             ))
