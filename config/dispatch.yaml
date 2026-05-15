@@ -10,6 +10,12 @@
 #
 # `tools` is the Claude Code tool allow-list written into the frontmatter.
 # Audit/review subagents are read-only; only scaffolders get Edit/Write.
+#
+# NOTE: `--profile teams` IGNORES the per-agent `tools:` below. There a
+# writer/reviewer classification in tools/generate_dispatch.py
+# (TEAMS_READONLY_AGENTS) is authoritative: reviewers/QA/coordinator/advisory
+# stay read-only; architects, devops, technical_writer, and every developer
+# get Read,Grep,Glob,Bash,Edit,Write so a spawned team can actually build.
 
 agents:
   # --- review / audit subagents (read-only) ---
@@ -68,6 +74,11 @@ agents:
     mcp_fallback: true
     model: sonnet
     tools: [Read, Grep, Glob, Bash]
+  cloudflare_expert:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash]
 
   # --- Coordination (Claude Code agent teams) ---
   team_lead:
@@ -102,6 +113,7 @@ agents:
   flutter_developer:        {mode: mcp_only}
   fullstack_developer:      {mode: mcp_only}
   go_backend:               {mode: mcp_only}
+  hono_developer:           {mode: mcp_only}
   integration_specialist:   {mode: mcp_only}
   ios_developer:            {mode: mcp_only}
   java_backend:             {mode: mcp_only}

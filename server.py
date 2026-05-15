@@ -70,6 +70,7 @@ from agents.development.ios_developer import IOSDeveloper
 from agents.development.php_developer import PHPDeveloper
 from agents.development.tui_developer import TUIDeveloper
 from agents.development.cli_installer_developer import CLIInstallerDeveloper
+from agents.development.hono_developer import HonoDeveloper
 
 # Data agents
 from agents.data.database_administrator import DatabaseAdministrator
@@ -85,6 +86,7 @@ from agents.quality.debugging_expert import DebuggingExpert
 # Infrastructure agents
 from agents.infrastructure.devops_engineer import DevOpsEngineer
 from agents.infrastructure.cloud_architect import CloudArchitect
+from agents.infrastructure.cloudflare_expert import CloudflareExpert
 
 # Coordination
 from agents.coordination.team_lead import TeamLead
@@ -120,6 +122,7 @@ AGENT_CLASSES = {
     "php_developer": PHPDeveloper,
     "tui_developer": TUIDeveloper,
     "cli_installer_developer": CLIInstallerDeveloper,
+    "hono_developer": HonoDeveloper,
     # Data
     "database_administrator": DatabaseAdministrator,
     # Quality
@@ -132,6 +135,7 @@ AGENT_CLASSES = {
     # Infrastructure
     "devops_engineer": DevOpsEngineer,
     "cloud_architect": CloudArchitect,
+    "cloudflare_expert": CloudflareExpert,
     # Coordination
     "team_lead": TeamLead,
 }
@@ -563,6 +567,137 @@ class MageNTServer:
                         "type": "object",
                         "properties": {"spec_id": {"type": "string"}},
                         "required": ["spec_id"],
+                    },
+                ),
+                Tool(
+                    name="magent_team_synthesize",
+                    description=(
+                        "Coordinator. Merge a set of teammate outputs into a "
+                        "schema-validated SynthesisReport (findings + "
+                        "dissenting_views + recommended_actions + "
+                        "open_questions). Driven by delivery_manager with "
+                        "Pydantic-strict contract + retry-on-validation-fail. "
+                        "Borch's Brain calls this on phase completion to "
+                        "replace free-form team-lead prose."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "task_outputs": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"},
+                                        "agent_type": {"type": "string"},
+                                        "output": {"type": "string"},
+                                    },
+                                    "required": ["name", "output"],
+                                },
+                            },
+                            "phase_name": {
+                                "type": "string",
+                                "description": "Optional phase label for context.",
+                            },
+                        },
+                        "required": ["task_outputs"],
+                    },
+                ),
+                Tool(
+                    name="magent_team_retask",
+                    description=(
+                        "Coordinator. Given the live team state and surfaced "
+                        "evidence, return a RetaskDelta describing what "
+                        "changes (if any) the team needs now: add / modify "
+                        "(prompt addendum) / drop teammates. Empty lists with "
+                        "a rationale means 'no change needed'. Driven by "
+                        "team_lead. Borch's Brain calls this when a teammate "
+                        "posts kind=evidence that may invalidate the current "
+                        "plan."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "current_team_state": {
+                                "type": "string",
+                                "description": "Short summary of each live teammate (name, agent_type, scope, status).",
+                            },
+                            "new_evidence": {
+                                "type": "string",
+                                "description": "The surfaced finding that may reshape the plan.",
+                            },
+                        },
+                        "required": ["current_team_state", "new_evidence"],
+                    },
+                ),
+                Tool(
+                    name="magent_plan_approve",
+                    description=(
+                        "Coordinator. Judge a teammate's plan-mode plan "
+                        "against approval criteria. Returns a "
+                        "schema-validated PlanApproval (approved + feedback "
+                        "+ blocking_concerns + optional_suggestions). Default "
+                        "reviewer is system_architect; pass "
+                        "reviewer_agent='delivery_manager' when criteria are "
+                        "release/process-shaped. Borch's Brain calls this "
+                        "when a teammate posts a plan-mode plan."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "plan_markdown": {
+                                "type": "string",
+                                "description": "The teammate's plan as plain markdown.",
+                            },
+                            "approval_criteria": {
+                                "type": "string",
+                                "description": "What the reviewer should check for. Defaults to the reviewer's standard checks.",
+                            },
+                            "reviewer_agent": {
+                                "type": "string",
+                                "enum": ["system_architect", "delivery_manager"],
+                                "default": "system_architect",
+                            },
+                        },
+                        "required": ["plan_markdown"],
+                    },
+                ),
+                Tool(
+                    name="magent_team_compose",
+                    description=(
+                        "Coordinator. Turn a fuzzy human brief into a "
+                        "schema-validated TeamComposition: 1..N teammates "
+                        "(name + agent_type + directive prompt + optional "
+                        "files_scope + model), plus a rationale and a "
+                        "suggested phase name. Driven by team_lead with "
+                        "Pydantic-strict contract + retry-on-validation-fail. "
+                        "Borch's `run --brief` materialises the result as a "
+                        "borch.toml manifest."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "brief": {
+                                "type": "string",
+                                "description": "Natural-language description of what the team should do.",
+                            },
+                            "project_context": {
+                                "type": "string",
+                                "description": "Optional repo / prior-findings context to ground the composition.",
+                            },
+                            "available_agent_types": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Constrains agent_type choices. Defaults to all magent specialists.",
+                            },
+                            "max_teammates": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 8,
+                                "default": 5,
+                            },
+                        },
+                        "required": ["brief"],
                     },
                 ),
             ])
@@ -1298,6 +1433,67 @@ class MageNTServer:
                             "missing": report.artifacts_missing,
                             "warnings": report.warnings,
                             "errors": report.errors,
+                        }
+                        return [TextContent(type="text", text=json.dumps(body, indent=2))]
+
+                    if name == "magent_team_synthesize":
+                        from utils.spec_pipeline import run_team_synthesize
+                        task_outputs = arguments.get("task_outputs") or []
+                        phase_name = arguments.get("phase_name", "") or ""
+                        model, _raw, usage = run_team_synthesize(
+                            task_outputs=task_outputs,
+                            phase_name=phase_name,
+                            agent_registry=self.agent_registry,
+                        )
+                        body = {
+                            "ok": True,
+                            "report": model.model_dump(),
+                            "usage": usage,
+                        }
+                        return [TextContent(type="text", text=json.dumps(body, indent=2))]
+
+                    if name == "magent_team_compose":
+                        from utils.spec_pipeline import run_team_compose
+                        model, _raw, usage = run_team_compose(
+                            brief=arguments["brief"],
+                            project_context=arguments.get("project_context"),
+                            available_agent_types=arguments.get("available_agent_types"),
+                            max_teammates=int(arguments.get("max_teammates", 5)),
+                            agent_registry=self.agent_registry,
+                        )
+                        body = {
+                            "ok": True,
+                            "composition": model.model_dump(),
+                            "usage": usage,
+                        }
+                        return [TextContent(type="text", text=json.dumps(body, indent=2))]
+
+                    if name == "magent_plan_approve":
+                        from utils.spec_pipeline import run_plan_approve
+                        model, _raw, usage = run_plan_approve(
+                            plan_markdown=arguments["plan_markdown"],
+                            approval_criteria=arguments.get("approval_criteria", "") or "",
+                            reviewer_agent=arguments.get("reviewer_agent", "system_architect"),
+                            agent_registry=self.agent_registry,
+                        )
+                        body = {
+                            "ok": True,
+                            "approval": model.model_dump(),
+                            "usage": usage,
+                        }
+                        return [TextContent(type="text", text=json.dumps(body, indent=2))]
+
+                    if name == "magent_team_retask":
+                        from utils.spec_pipeline import run_team_retask
+                        model, _raw, usage = run_team_retask(
+                            current_team_state=arguments["current_team_state"],
+                            new_evidence=arguments["new_evidence"],
+                            agent_registry=self.agent_registry,
+                        )
+                        body = {
+                            "ok": True,
+                            "delta": model.model_dump(),
+                            "usage": usage,
                         }
                         return [TextContent(type="text", text=json.dumps(body, indent=2))]
 
