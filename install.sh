@@ -52,7 +52,8 @@ Options:
       --regenerate    Re-run the dispatch generator before installing
       --dry-run       Print actions without writing
       --enable-teams  Set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 in
-                      ~/.claude/settings.json (Claude Code agent teams)
+                      ~/.claude/settings.json; with -c claude also implies
+                      --profile teams for the full 39-agent roster
       --no-enable-teams
                       Skip the agent-teams prompt and do not modify settings
   -h, --help          Show this help
@@ -101,6 +102,11 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown option: $1"; show_help ;;
     esac
 done
+
+# When explicitly enabling agent-teams for claude, auto-upgrade profile to teams.
+if [[ "$ENABLE_TEAMS" == "yes" && "$CLIENT" == "claude" && "$PROFILE" == "full" ]]; then
+    PROFILE="teams"
+fi
 
 # ── Multi-mode dispatch helpers ─────────────────────────
 resolve_mode() {
@@ -188,10 +194,17 @@ maybe_enable_agent_teams() {
     esac
     if [[ "$DRY_RUN" == true ]]; then
         info "Would set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 in ~/.claude/settings.json"
+        [[ "$PROFILE" != "teams" && "$CLIENT" == "claude" ]] && \
+            info "Would re-run generator with --profile teams for full agent roster"
         return
     fi
     "$venv_py" "$MAGENT_DIR/tools/enable_teams.py" || \
         err "enable_teams.py failed — set the env var manually in ~/.claude/settings.json"
+    if [[ "$PROFILE" != "teams" && "$CLIENT" == "claude" && -n "$DISPATCH_TARGET" ]]; then
+        PROFILE="teams"
+        info "Upgrading to --profile teams for full agent roster..."
+        run_dispatch_generator "$DISPATCH_TARGET" "generate" "$venv_py"
+    fi
 }
 
 # ── Helpers ─────────────────────────────────────────────

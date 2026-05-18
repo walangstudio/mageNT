@@ -41,3 +41,37 @@ flat-senior:
   database_administrator: senior
   devops_engineer: senior
   sdet: senior
+
+# Promote every implementer (framework devs + qa/automation/debugging) from
+# the Senior default to Staff. Staff/Principal map to the opus model in
+# tools/generate_dispatch.py, so this trades ~5x token cost + latency for
+# higher implementation quality. Opt in per hard project via
+# `--seniority-profile staff-implementers` (or magent.seniority.yaml); do NOT
+# make it the global default — sonnet 4.6 is strong at routine codegen and
+# parallel team dispatch multiplies the cost.
+staff-implementers:
+  android_developer: staff
+  api_developer: staff
+  cli_installer_developer: staff
+  dotnet_backend: staff
+  flutter_developer: staff
+  fullstack_developer: staff
+  go_backend: staff
+  hono_developer: staff
+  integration_specialist: staff
+  ios_developer: staff
+  java_backend: staff
+  mobile_developer: staff
+  nextjs_developer: staff
+  nodejs_backend: staff
+  php_developer: staff
+  python_backend: staff
+  react_developer: staff
+  react_native_developer: staff
+  rust_backend: staff
+  svelte_developer: staff
+  tui_developer: staff
+  vue_developer: staff
+  qa_engineer: staff
+  automation_qa: staff
+  debugging_expert: staff
