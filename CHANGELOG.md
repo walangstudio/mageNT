@@ -6,6 +6,31 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.1] - 2026-05-18
+
+### Changed
+
+- Teams-mode tool grants now driven by an explicit per-agent `TEAMS_TOOLS`
+  map (implementer / docs-only / advisory) replacing the binary readonly-set
+  heuristic. Developers, `system_architect`, and `delivery_manager` get
+  `Edit`/`Write` (write their own code/ADRs/release docs); pure reviewers
+  (`security_engineer`, `business_analyst`, `product_manager`,
+  `ui_ux_designer`, `team_lead`) stay read-only; `technical_writer` is
+  docs-only (no `Bash`); `python_backend` adds `NotebookEdit`.
+- Developer agents now declare an explicit `tools:` allowlist in
+  `config/dispatch.yaml` instead of relying on an implicit teams-mode default.
+- Hardened the `TEAM_CONTEXT_BLOCK` task-ledger protocol: claiming
+  (`in_progress`) before work and completing (`completed`) on report is now
+  unconditional and gated, not optional — fixes teammates leaving tasks
+  `pending`.
+
+### Added
+
+- `staff-implementers` seniority profile (opt-in opus for the developer
+  roster).
+- Installer auto-promotes `--profile full` → `teams` when run with
+  `--enable-teams` and `-c claude`, so the full 39-agent roster is generated.
+
 ## [0.7.0] - 2026-05-14
 
 ### Added
