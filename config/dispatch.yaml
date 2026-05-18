@@ -106,28 +106,28 @@ agents:
 
   # --- framework/language developers stay MCP-only ---
   # They are pattern-driven personas best invoked via consult_<name>.
-  android_developer:        {mode: mcp_only}
-  api_developer:            {mode: mcp_only}
-  cli_installer_developer:  {mode: mcp_only}
-  dotnet_backend:           {mode: mcp_only}
-  flutter_developer:        {mode: mcp_only}
-  fullstack_developer:      {mode: mcp_only}
-  go_backend:               {mode: mcp_only}
-  hono_developer:           {mode: mcp_only}
-  integration_specialist:   {mode: mcp_only}
-  ios_developer:            {mode: mcp_only}
-  java_backend:             {mode: mcp_only}
-  mobile_developer:         {mode: mcp_only}
-  nextjs_developer:         {mode: mcp_only}
-  nodejs_backend:           {mode: mcp_only}
-  php_developer:            {mode: mcp_only}
-  python_backend:           {mode: mcp_only}
-  react_developer:          {mode: mcp_only}
-  react_native_developer:   {mode: mcp_only}
-  rust_backend:             {mode: mcp_only}
-  svelte_developer:         {mode: mcp_only}
-  tui_developer:            {mode: mcp_only}
-  vue_developer:            {mode: mcp_only}
+  android_developer:        {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  api_developer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  cli_installer_developer:  {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  dotnet_backend:           {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  flutter_developer:        {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  fullstack_developer:      {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  go_backend:               {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  hono_developer:           {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  integration_specialist:   {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  ios_developer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  java_backend:             {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  mobile_developer:         {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  nextjs_developer:         {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  nodejs_backend:           {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  php_developer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  python_backend:           {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  react_developer:          {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  react_native_developer:   {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  rust_backend:             {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  svelte_developer:         {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  tui_developer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  vue_developer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
 
 skills:
   scaffold_react:    {mode: skill, tools: [Read, Write, Edit, Bash]}

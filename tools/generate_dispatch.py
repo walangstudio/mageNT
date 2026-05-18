@@ -55,15 +55,22 @@ When and only when you are a team teammate:
    prose ONLY when told a downstream skill will parse your output. Never send a
    bare JSON object or a structured status blob as a message — the team
    framework rejects those.
-3. If you took the task from the shared task list, claim it before starting and
-   call `TaskUpdate` to mark it complete (with a short result note) when you
-   send findings. Never go idle without a TaskUpdate.
+3. Task ledger is MANDATORY, not optional, and not conditional. If a shared
+   task list exists you own a task on it — even if the lead created or assigned
+   it and you never explicitly "took" it. BEFORE you start work, call
+   `TaskUpdate` to set that task in_progress (claim it). In the SAME turn you
+   `SendMessage` your findings, call `TaskUpdate` again to mark it complete with
+   a one-line result note. A task still `pending`/`in_progress` after you have
+   reported is a protocol violation: your work does NOT count as delivered until
+   the ledger reflects it — the lead reconciles from the ledger, not your
+   transcript. Never go idle with an open task.
 4. Anything outside your owned scope: do NOT attempt it. SendMessage the right
    specialist by name, stating what you hand off and why.
 
 `SendMessage` and the task-management tools are always available to a teammate
 regardless of the `tools:` frontmatter allowlist — their absence never blocks
-this protocol."""
+this protocol. Reporting findings without a matching `TaskUpdate` to complete
+your task is incomplete work, not a stylistic choice."""
 
 
 def load_config(path: str = CONFIG_PATH) -> Dict[str, Any]:
@@ -144,17 +151,41 @@ def _csv_list(items: List[str]) -> str:
     return ", ".join(items)
 
 
-# Teams-mode: these stay read-only (review/audit/coordination/advisory).
-# Everyone else — architects, analysts, devops, technical_writer, and every
-# developer — gets Edit/Write so a spawned team can actually build. This
-# classification is authoritative ONLY under --profile teams and overrides
-# the per-agent `tools:` allowlist in dispatch.yaml there.
-TEAMS_READONLY_AGENTS = {
-    "security_engineer", "qa_engineer", "automation_qa", "sdet",
-    "performance_engineer", "debugging_expert",
-    "team_lead",
-    "business_analyst", "product_manager", "ui_ux_designer",
+# Teams-mode tool roles. Authoritative ONLY under --profile teams; this
+# overrides the dispatch.yaml `tools:` allowlist there (dispatch.yaml `tools:`
+# still drives the skill/mcp surface, which has different needs).
+#
+# Principle: implementers get write tools; advisors stay read-only. The split
+# is deliberate — review/architecture/PM/QA-plan/security agents must never
+# hand-write the fix they recommend, or the audit trail collapses and the role
+# becomes self-marking-homework.
+_TEAMS_IMPLEMENTER = ["Read", "Grep", "Glob", "Bash", "Edit", "Write"]
+
+# Advisory / review-only: Bash stays (grep, run tests, inspect processes during
+# analysis); Edit/Write deliberately withheld.
+_TEAMS_ADVISORY = ["Read", "Grep", "Glob", "Bash"]
+
+TEAMS_TOOLS = {
+    "business_analyst": _TEAMS_ADVISORY,
+    "product_manager": _TEAMS_ADVISORY,
+    "security_engineer": _TEAMS_ADVISORY,
+    "ui_ux_designer": _TEAMS_ADVISORY,
+    "team_lead": _TEAMS_ADVISORY,
+    # Docs-capable advisors: their deliverable IS a committed file (ADR,
+    # design doc, release decision/runbook). The auditability rule is "don't
+    # hand-write the CODE fix you recommend" — role-enforced in the prompt,
+    # not by withholding Write. Bash stays for git log / test / CI inspection
+    # that informs a good ADR or release call.
+    "system_architect": _TEAMS_IMPLEMENTER,
+    "delivery_manager": _TEAMS_IMPLEMENTER,
+    # Docs-only: no Bash by design — doc work shouldn't run arbitrary shell.
+    "technical_writer": ["Read", "Grep", "Glob", "Edit", "Write"],
+    # Python implementer: many Python codebases ship .ipynb; NotebookEdit lets
+    # it modify cells without losing kernel metadata.
+    "python_backend": _TEAMS_IMPLEMENTER + ["NotebookEdit"],
 }
+# Every other agent (all framework devs + qa/automation/sdet/perf/debugging +
+# cloud_architect/database_administrator/devops_engineer) is an implementer.
 
 
 def render_subagent(
@@ -178,12 +209,9 @@ def render_subagent(
         MAX_DESCRIPTION_LEN,
     )
     if teams_mode:
-        # Teams mode: classification is authoritative and overrides the
+        # Teams mode: TEAMS_TOOLS is authoritative and overrides the
         # dispatch.yaml `tools:` allowlist so spawned teammates can build.
-        if name in TEAMS_READONLY_AGENTS:
-            tools = ["Read", "Grep", "Glob", "Bash"]
-        else:
-            tools = ["Read", "Grep", "Glob", "Bash", "Edit", "Write"]
+        tools = TEAMS_TOOLS.get(name, _TEAMS_IMPLEMENTER)
     else:
         tools = spec.get("tools") or ["Read", "Grep", "Glob", "Bash"]
     # team_model drives the frontmatter `model:` field, which Claude Code
