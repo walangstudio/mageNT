@@ -205,6 +205,13 @@ if "!GLOBAL_CONFIG!"=="true" (
     )
 )
 
+rem ── Auto-promote profile to teams when --enable-teams + -c claude ────────
+if /i "!ENABLE_TEAMS!"=="yes" (
+    if /i "!CLIENT!"=="claude" (
+        if /i "!PROFILE!"=="full" set "PROFILE=teams"
+    )
+)
+
 rem ── Read version from __init__.py ────────────────────────
 set "VERSION=unknown"
 set "_PY_VER=%TEMP%\magent_version.py"
@@ -959,10 +966,20 @@ if /i not "!ENABLE_TEAMS!"=="yes" (
 )
 if /i "!DRY_RUN!"=="true" (
     echo   Would set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 in %USERPROFILE%\.claude\settings.json
+    if /i not "!PROFILE!"=="teams" ( if /i "!CLIENT!"=="claude" echo   Would also upgrade to --profile teams for full agent roster )
     goto :eof
 )
 "!_pyexe!" "!MAGENT_DIR!\tools\enable_teams.py"
 if errorlevel 1 echo   WARNING: enable_teams.py failed; set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 manually.
+if /i not "!PROFILE!"=="teams" (
+    if /i "!CLIENT!"=="claude" (
+        if not "!DISPATCH_TARGET!"=="" (
+            set "PROFILE=teams"
+            echo   Upgrading to --profile teams for full agent roster...
+            call :run_dispatch_generator "!DISPATCH_TARGET!" generate "!_pyexe!"
+        )
+    )
+)
 goto :eof
 
 rem ════════════════════════════════════════════════════════
