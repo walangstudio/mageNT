@@ -81,8 +81,30 @@ class TeamLead(BaseAgent):
             "When all teammates are idle, synthesize: group findings by area, "
             "deduplicate, attribute by teammate name, surface conflicts "
             "explicitly rather than picking a side.",
-            "Ask the user whether to clean up the team. On confirmation, shut "
-            "down teammates and remove ~/.claude/teams/<name>/.",
+            "Ask the user whether to clean up the team. On confirmation, run "
+            "the shutdown handshake: send each teammate by name a "
+            "shutdown_request via SendMessage, noting the request_id the tool "
+            "returns. Idle is not shut down — a teammate with no open task is "
+            "still an active session.",
+            "Expect teammates to idle WITHOUT a shutdown_response on the first "
+            "request (the JSON-only persona's 'no task = done' instinct). When "
+            "a teammate idles with no shutdown_response, do NOT wait — send it "
+            "a plain-text SendMessage naming the missed request_id and telling "
+            "it to emit its shutdown_response NOW: approve true if it has no "
+            "unfinished in-scope work, or approve false with a one-line reason "
+            "if it genuinely does. Do NOT dictate the approve value — that "
+            "preserves a legitimate veto; you are only un-sticking a teammate "
+            "that idled instead of answering. e.g. 'You missed shutdown_request "
+            "<that id>. Reply now via SendMessage with "
+            "{\"type\":\"shutdown_response\",\"request_id\":\"<that id>\","
+            "\"approve\":<true unless you have unfinished in-scope work, then "
+            "false with a reason>}.' Repeat once if needed.",
+            "Only after every teammate has emitted a shutdown_response approval "
+            "(you receive a shutdown_approved / teammate_terminated for each) "
+            "run cleanup / TeamDelete (it fails if any teammate is still "
+            "active) and remove ~/.claude/teams/<name>/. If a teammate rejects "
+            "(approve: false), address its stated reason, then re-send the "
+            "shutdown_request.",
         ]
 
     @property
@@ -130,6 +152,8 @@ class TeamLead(BaseAgent):
             "The user's request cannot be decomposed into independent tasks "
             "(serial dependency through every step) — single-agent work, "
             "not team work",
+            "A teammate never answers a shutdown_request, or repeatedly "
+            "rejects it, blocking clean team disband",
         ]
 
     @property
@@ -153,6 +177,8 @@ class TeamLead(BaseAgent):
             "Attribute every finding to its teammate by name in the synthesis",
             "Never silently substitute a teammate; if the right one isn't "
             "installed, say so",
+            "Idle != shut down — never call cleanup/TeamDelete until every "
+            "teammate has returned a shutdown_response approval",
         ]
 
     @property

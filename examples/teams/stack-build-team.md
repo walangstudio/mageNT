@@ -39,5 +39,6 @@ implementation code.
 ## Cleanup
 
 ```
-Clean up the team
+Ask each teammate to shut down and wait for every teammate's shutdown
+confirmation, then clean up the team.
 ```

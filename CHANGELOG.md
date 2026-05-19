@@ -6,6 +6,34 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.2] - 2026-05-19
+
+### Fixed
+
+- Teams-mode shutdown handshake. Teammates went idle on a `shutdown_request`
+  but never terminated, so the lead could not disband the team (cleanup /
+  `TeamDelete` fails while any teammate is active). `TEAM_CONTEXT_BLOCK` rule 5
+  now (a) explicitly overrides the JSON-only persona's "no open task = done =
+  idle" instinct — the arrival of a `shutdown_request` IS the turn's required
+  action; (b) gives the literal `shutdown_response` payload to send, echoing
+  the verbatim `request_id`; (c) carves the `shutdown_response` out of the
+  rule-2 ban on structured-blob messages. Verified by a live agent-teams test:
+  with the first (weaker) wording the teammate still idled; the strengthened
+  rule + lead nudge produce a correct `shutdown_approved` (request_id echoed)
+  and clean `teammate_terminated` + `TeamDelete`.
+- `magent-team_lead` now drives the handshake AND its recovery: send each
+  teammate a `shutdown_request`; when a teammate idles without a
+  `shutdown_response` (expected on first request), immediately send a
+  plain-text nudge with the literal payload (the proven-reliable path) rather
+  than waiting; only run cleanup once every teammate has emitted an approval.
+  New escalation for a teammate that never answers or repeatedly rejects.
+
+### Changed
+
+- `docs/AGENT_TEAMS.md` documents the shutdown handshake ("idle != shut
+  down"); the four `examples/teams/*` preset cleanup prompts now ask each
+  teammate to confirm shutdown before cleanup.
+
 ## [0.7.1] - 2026-05-18
 
 ### Changed

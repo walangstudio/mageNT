@@ -52,8 +52,10 @@ What that does:
 2. Each subagent's `model:` frontmatter field is set from the agent's
    `team_model` property (Principal/Staff → `opus`; Senior/specialist →
    `sonnet`).
-3. Each body ends with a `## Team Context` block reminding the teammate that
-   `SendMessage` is always available regardless of the `tools:` allowlist.
+3. Each body ends with a `## Team Context` block: `SendMessage` is always
+   available regardless of the `tools:` allowlist, the task-ledger claim/
+   complete protocol is mandatory, and a `shutdown_request` must be answered
+   with a `shutdown_response` (see "Shutting down" below).
 4. Sets `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in
    `~/.claude/settings.json` (idempotent JSON merge).
 
@@ -131,6 +133,45 @@ to your mageNT checkout):
 - `teammate_idle_summary` — appends a one-line status to
   `specs/active/team_log.md` whenever a teammate goes idle. Gives the lead
   one file to scan when synthesizing.
+
+## Shutting down & cleanup
+
+Agent-teams shutdown is a **two-phase handshake over `SendMessage`**, not
+idleness:
+
+1. The lead sends each teammate a `shutdown_request` carrying a `request_id`.
+2. Each teammate MUST reply with a `shutdown_response` echoing the exact
+   `request_id` — `approve: true` once its ledger task is `completed`, or
+   `approve: false` with a one-line `reason` if it has unfinished in-scope
+   work.
+3. Only after every teammate has approved does the lead run cleanup /
+   `TeamDelete` and remove `~/.claude/teams/<name>/`. Cleanup **fails** while
+   any teammate is still active.
+
+**Idle is not shut down.** A teammate with no open task is still a live
+session; finishing a turn or replying in plain text is not acknowledgment. If
+a teammate never returns a `shutdown_response`, the team can't be disbanded
+cleanly — the `magent-team_lead` agent drives this handshake, and every
+generated subagent's `## Team Context` block instructs teammates to answer.
+The shipped preset cleanup prompts ask each teammate to confirm shutdown
+before cleanup for this reason.
+
+**Expected first-request miss + recovery.** In live testing a magent teammate
+often idles on the *first* `shutdown_request` without answering — its
+JSON-only persona treats "no open task" as "done". This is recovered, not
+fatal: the lead immediately follows with a plain-text nudge containing the
+literal payload to send —
+
+```
+You missed a shutdown_request. Send exactly: SendMessage to "<lead>" with
+message {"type":"shutdown_response","request_id":"<that id>","approve":true}.
+Do it now.
+```
+
+— and the teammate then emits a correct `shutdown_response`, the framework
+reports `shutdown_approved` (request_id echoed) + `teammate_terminated`, and
+`TeamDelete` succeeds. `magent-team_lead` performs this nudge automatically;
+don't wait on an idle teammate after a shutdown_request — nudge it.
 
 ## Caveats
 
