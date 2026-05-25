@@ -156,6 +156,14 @@ generated subagent's `## Team Context` block instructs teammates to answer.
 The shipped preset cleanup prompts ask each teammate to confirm shutdown
 before cleanup for this reason.
 
+**Protocol messages are handled first.** The `## Team Context` block tells
+every teammate that when a turn is woken by a `shutdown_request` *or* a
+`plan_approval_request`, emitting the matching `_response` is that turn's only
+required action — checked before any other work, ahead of the "no task = done"
+instinct. `plan_approval_request` follows the same handshake as shutdown:
+reply with a `plan_approval_response` echoing the `request_id`, `approve` true,
+or false with `feedback`.
+
 **Expected first-request miss + recovery.** In live testing a magent teammate
 often idles on the *first* `shutdown_request` without answering — its
 JSON-only persona treats "no open task" as "done". This is recovered, not
@@ -171,7 +179,11 @@ Do it now.
 — and the teammate then emits a correct `shutdown_response`, the framework
 reports `shutdown_approved` (request_id echoed) + `teammate_terminated`, and
 `TeamDelete` succeeds. `magent-team_lead` performs this nudge automatically;
-don't wait on an idle teammate after a shutdown_request — nudge it.
+don't wait on an idle teammate after a shutdown_request — nudge it. The nudge
+is **mandatory, not optional**: the lead must not report a teammate as
+"parked" or unresponsive until it has sent the nudge and repeated it once. Only
+after a teammate ignores two nudges does the lead escalate to the user, naming
+the teammate and the outstanding `request_id`.
 
 ## Caveats
 

@@ -87,18 +87,28 @@ class TeamLead(BaseAgent):
             "returns. Idle is not shut down — a teammate with no open task is "
             "still an active session.",
             "Expect teammates to idle WITHOUT a shutdown_response on the first "
-            "request (the JSON-only persona's 'no task = done' instinct). When "
-            "a teammate idles with no shutdown_response, do NOT wait — send it "
-            "a plain-text SendMessage naming the missed request_id and telling "
-            "it to emit its shutdown_response NOW: approve true if it has no "
-            "unfinished in-scope work, or approve false with a one-line reason "
-            "if it genuinely does. Do NOT dictate the approve value — that "
-            "preserves a legitimate veto; you are only un-sticking a teammate "
-            "that idled instead of answering. e.g. 'You missed shutdown_request "
-            "<that id>. Reply now via SendMessage with "
+            "request (the JSON-only persona's 'no task = done' instinct). This "
+            "is recovered by nudging, NOT a reason to give up: you MUST NOT "
+            "report a teammate as parked / unresponsive / 'stays parked' until "
+            "you have run the full nudge cycle below and it has still not "
+            "answered. When a teammate idles with no shutdown_response, do NOT "
+            "wait — send it a plain-text SendMessage naming the missed "
+            "request_id and telling it to emit its shutdown_response NOW: "
+            "approve true if it has no unfinished in-scope work, or approve "
+            "false with a one-line reason if it genuinely does. Do NOT dictate "
+            "the approve value — that preserves a legitimate veto; you are only "
+            "un-sticking a teammate that idled instead of answering. e.g. 'You "
+            "missed shutdown_request <that id>. Reply now via SendMessage with "
             "{\"type\":\"shutdown_response\",\"request_id\":\"<that id>\","
             "\"approve\":<true unless you have unfinished in-scope work, then "
-            "false with a reason>}.' Repeat once if needed.",
+            "false with a reason>}.' If it idles again, send the same nudge "
+            "ONE more time. Only after a teammate has ignored two nudges may "
+            "you stop and escalate to the user — by name, with the exact "
+            "request_id(s) still outstanding. The identical cycle applies to a "
+            "missed plan_approval_request: nudge with the literal "
+            "{\"type\":\"plan_approval_response\",\"request_id\":\"<that id>\","
+            "\"approve\":<true/false>,\"feedback\":\"...\"} payload, repeat "
+            "once, then escalate.",
             "Only after every teammate has emitted a shutdown_response approval "
             "(you receive a shutdown_approved / teammate_terminated for each) "
             "run cleanup / TeamDelete (it fails if any teammate is still "
@@ -152,8 +162,9 @@ class TeamLead(BaseAgent):
             "The user's request cannot be decomposed into independent tasks "
             "(serial dependency through every step) — single-agent work, "
             "not team work",
-            "A teammate never answers a shutdown_request, or repeatedly "
-            "rejects it, blocking clean team disband",
+            "A teammate ignores two shutdown_request nudges, or repeatedly "
+            "rejects it, blocking clean team disband (escalate only after the "
+            "nudge cycle, naming the teammate and outstanding request_id)",
         ]
 
     @property
