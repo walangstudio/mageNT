@@ -11,11 +11,14 @@
 # `tools` is the Claude Code tool allow-list written into the frontmatter.
 # Audit/review subagents are read-only; only scaffolders get Edit/Write.
 #
-# NOTE: `--profile teams` IGNORES the per-agent `tools:` below. There a
-# writer/reviewer classification in tools/generate_dispatch.py
-# (TEAMS_READONLY_AGENTS) is authoritative: reviewers/QA/coordinator/advisory
-# stay read-only; architects, devops, technical_writer, and every developer
-# get Read,Grep,Glob,Bash,Edit,Write so a spawned team can actually build.
+# NOTE: `--profile teams` IGNORES the per-agent `tools:` below. There the
+# TEAMS_TOOLS map in tools/generate_dispatch.py is authoritative: advisory
+# roles (business_analyst, product_manager, security_engineer, ui_ux_designer,
+# team_lead) stay read-only; everyone else (architects, delivery_manager,
+# devops, every developer) gets Read,Grep,Glob,Bash,Edit,Write so a spawned
+# team can build. technical_writer is Write-but-no-Bash; python_backend also
+# gets NotebookEdit; security_engineer/debugging_expert/cli_installer_developer
+# additionally get WebFetch,WebSearch for CVE / library-bug / registry lookups.
 
 agents:
   # --- review / audit subagents (read-only) ---
@@ -23,7 +26,7 @@ agents:
     mode: subagent
     mcp_fallback: true
     model: sonnet
-    tools: [Read, Grep, Glob, Bash]
+    tools: [Read, Grep, Glob, Bash, WebFetch, WebSearch]
   qa_engineer:
     mode: subagent
     mcp_fallback: true
@@ -48,7 +51,19 @@ agents:
     mode: subagent
     mcp_fallback: true
     model: sonnet
+    tools: [Read, Grep, Glob, Bash, WebFetch, WebSearch]
+  # General PR/diff reviewer — read-only (reports findings, never writes the fix).
+  code_reviewer:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
     tools: [Read, Grep, Glob, Bash]
+  # a11y reviewer that can also remediate ARIA/markup.
+  accessibility_specialist:
+    mode: subagent
+    mcp_fallback: true
+    model: sonnet
+    tools: [Read, Grep, Glob, Bash, Edit, Write]
   system_architect:
     mode: subagent
     mcp_fallback: true
@@ -128,6 +143,10 @@ agents:
   svelte_developer:         {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   tui_developer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   vue_developer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  refactoring_specialist:   {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  observability_engineer:   {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  data_engineer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  ml_engineer:              {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
 
 skills:
   scaffold_react:    {mode: skill, tools: [Read, Write, Edit, Bash]}
@@ -140,6 +159,12 @@ skills:
   debug_code:        {mode: skill, tools: [Read, Grep, Glob, Bash]}
   analyze_error:     {mode: skill, tools: [Read, Grep, Glob, Bash]}
   check_versions:    {mode: skill, tools: [Read, Bash]}
+  # Execution-grounded quality skills (actually run the tool, not recipes)
+  lint:              {mode: skill, tools: [Read, Grep, Glob, Bash]}
+  typecheck:         {mode: skill, tools: [Read, Grep, Glob, Bash]}
+  format:            {mode: skill, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  mutation_test:     {mode: skill, tools: [Read, Grep, Glob, Bash]}
+  dependency_audit:  {mode: skill, tools: [Read, Grep, Glob, Bash]}
 
   # --- Phase 7 spec pipeline skills (slash-command UX wrapping magent_* MCP tools) ---
   magent_constitution:

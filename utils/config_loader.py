@@ -198,6 +198,10 @@ class ConfigLoader:
         server['version'] = _read_package_version()
         return server
 
+    def get_rules_config(self) -> Dict[str, Any]:
+        """Get the rules-engine configuration block (config.yaml `rules:`)."""
+        return dict(self.config.get('rules', {}))
+
     def reload(self) -> None:
         """Reload configuration from file."""
         self.config = self._load_config()

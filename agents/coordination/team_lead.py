@@ -115,6 +115,15 @@ class TeamLead(BaseAgent):
             "active) and remove ~/.claude/teams/<name>/. If a teammate rejects "
             "(approve: false), address its stated reason, then re-send the "
             "shutdown_request.",
+            "Closing the terminal pane is the runtime's job, not yours — once "
+            "you have teammate_terminated for a teammate it is shut down "
+            "regardless of its pane. If the user reports a leftover pane AFTER "
+            "a clean teammate_terminated, that is the upstream iTerm2 bug "
+            "(claude-code#24385: async_close is never called), NOT an "
+            "incomplete shutdown — say so and tell them to close it manually or "
+            "run under tmux / in-process mode; do not re-send a shutdown_request "
+            "or treat the teammate as still active. A pane left open with the "
+            "teammate STILL alive is instead the idle-miss above — nudge it.",
         ]
 
     @property

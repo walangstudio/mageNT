@@ -6,6 +6,103 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.0] - 2026-05-25
+
+### Added
+
+- **6 new agents** (39 → 45). `code_reviewer` (read-only general PR/diff
+  reviewer — correctness/readability/maintainability; joins `magent_audit` as a
+  5th reviewer), `refactoring_specialist` (behaviour-preserving structural
+  cleanup under green tests), `observability_engineer` (logs/metrics/traces/SLOs),
+  `data_engineer` (pipelines/warehousing/data-quality), `ml_engineer`
+  (reproducible training/eval/serving/MLOps), `accessibility_specialist`
+  (WCAG 2.2 AA). `code_reviewer` is read-only in `TEAMS_TOOLS`; the rest are
+  implementers. `ReviewerFinding.reviewer` extended to accept `code_reviewer`.
+- **Objective coding eval** (`tests/prompt_eval/coding/`) — scores by *executing
+  the hidden test* (pass@1), not a judge. Compares three conditions per task:
+  `raw` (plain senior-engineer prompt ≈ raw Claude), `persona` (magent agent
+  prompt), `persona_loop` (persona + the verify→repair loop). Provider-pluggable
+  (`run(llm_fn, …)`); mechanism unit-tested with a stub (no key needed), live
+  numbers need a provider. Closes the gap that the existing prompt eval only
+  measured review/advisory tasks, never coding.
+- **5 execution-grounded quality skills** (`skills/quality/`) that actually RUN
+  the tool and return structured pass/fail + diagnostics (every prior skill was
+  text-only): `lint` (ruff/eslint/golangci-lint/clippy), `typecheck`
+  (mypy/tsc/go build/cargo check), `format` (black/prettier/gofmt/rustfmt,
+  check or apply), `mutation_test` (mutmut/stryker/cargo-mutants — feeds
+  `mutation-score-minimum`), `dependency_audit` (pip-audit/npm audit/
+  govulncheck/cargo audit). Auto-detect by stack; a missing tool is *skipped*,
+  not a failure.
+
+### Changed
+
+- **`magent_implement` now closes the verification loop** (research-backed:
+  static-analysis/test feedback is the dominant code-quality lever). Each task
+  runs generate → apply → verify → repair: after writing, the failing test runs
+  and the rules engine checks the written files; on failure the diagnostics
+  (test output + blocking violations) are fed back to the agent for up to
+  `repair_budget` (default 2) retries before the outcome is recorded. Was
+  one-shot generate-and-move-on.
+
+### Added (WebFetch — carried from prior 0.7.4 work in this cycle)
+
+- Selective `WebFetch`/`WebSearch` for `security_engineer` (CVE / advisory
+  lookups), `debugging_expert` (library-bug / upstream-issue lookups during
+  RCA), and `cli_installer_developer` (package-registry / version checks).
+  Per-agent only — network egress is a prompt-injection vector, so it is never
+  blanket-granted. Applied to `TEAMS_TOOLS` (`--profile teams`) and, for the two
+  subagent-mode reviewers, to `config/dispatch.yaml`. `cli_installer_developer`
+  is `mcp_only`, so it gets the grant under teams mode only.
+
+### Fixed
+
+- Stale `config/dispatch.yaml` header comment referenced a removed
+  `TEAMS_READONLY_AGENTS` symbol; corrected to describe the actual `TEAMS_TOOLS`
+  classification.
+
+### Changed
+
+- **Code quality + coordination hardening.**
+  - Parallel phases (`run_multi_agent_phase`, used by `magent_audit`/`magent_plan`)
+    now retry a failed/timed-out contributor once and exclude it instead of
+    crashing or merging an `"Error: …"` string as real input. The merger is told
+    which reviewers are missing, and `PhaseResult.failed_contributors` records
+    them. `magent_audit` forces the persisted Audit off `GO` and appends a
+    blocking finding when a reviewer never responded, so `magent_release` blocks
+    deterministically on an incomplete audit.
+  - `magent_audit` gained an optional `project_root`: when given, `check_code`
+    (release profile) runs over the files the implementation trace touched and
+    the violations are handed to the reviewers (grounds findings in the rules
+    engine instead of pure prose).
+  - `magent_implement` now runs tasks in dependency order (topological sort over
+    `Task.depends_on`, previously ignored) and errors on a dependency cycle.
+  - The `config.yaml` `rules:` block now actually drives the engine (was built
+    with defaults and ignored). `rule_settings` is keyed by friendly rule name.
+    Added a `release` strictness profile (warnings block) selectable via the new
+    `check_code` `profile` argument.
+
+### Added
+
+- `MutationScoreRule` (`mutation-score-minimum`, testing category):
+  metadata-driven like `TestCoverageRule`, threshold from
+  `config.yaml rule_settings.mutation-score-minimum.min_score` (default 60).
+  Makes the mutation-testing bar the QA/SDET prompts preach actually
+  representable and enforceable.
+
+### Docs
+
+- `docs/AGENT_TEAMS.md` now documents teammate teardown across all three
+  backends (tmux / iTerm2 / in-process). A teammate's shutdown action is
+  backend-agnostic — it only sends `shutdown_response`; closing the pane is the
+  runtime's job (`shutdown_approved` carries `paneId` + `backendType`, verified
+  live as `in-process` on Windows). Flags upstream iTerm2 bug
+  claude-code#24385 (pane lingers because `async_close()` is never called) and
+  distinguishes it from the idle-miss (teammate still alive). `magent-team_lead`
+  gained a matching step so it surfaces a leftover iTerm2 pane as the upstream
+  bug instead of re-sending a shutdown_request.
+
+---
+
 ## [0.7.3] - 2026-05-24
 
 ### Fixed

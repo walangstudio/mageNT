@@ -277,25 +277,51 @@ def _apply_files(workspace: Path, files: List[Any]) -> List[str]:
     return written
 
 
-def _run_test(framework: TestFramework, workspace: Path, test_path: str) -> bool:
-    """Run the framework's runner against a single test file. Returns True on exit 0."""
+def _run_test_verbose(framework: TestFramework, workspace: Path, test_path: str) -> Tuple[bool, str]:
+    """Run the framework's runner against one test file. Returns (passed, output)."""
     if framework.name == "unknown":
-        return False
+        return False, "no test framework detected"
     cmd_str = framework.runner_command.format(path=test_path)
     try:
         proc = subprocess.run(
-            cmd_str,
-            cwd=workspace,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=120,
+            cmd_str, cwd=workspace, shell=True,
+            capture_output=True, text=True, timeout=120,
         )
-        return proc.returncode == 0
+        return proc.returncode == 0, ((proc.stdout or "") + (proc.stderr or "")).strip()
     except subprocess.TimeoutExpired:
-        return False
-    except Exception:
-        return False
+        return False, "test run timed out after 120s"
+    except Exception as exc:  # noqa: BLE001
+        return False, f"test run error: {exc}"
+
+
+def _run_test(framework: TestFramework, workspace: Path, test_path: str) -> bool:
+    """Run the framework's runner against a single test file. Returns True on exit 0."""
+    return _run_test_verbose(framework, workspace, test_path)[0]
+
+
+def _rules_errors(project_dir: Path, files_written: List[str]) -> str:
+    """ERROR-level rule violations on the written files (release profile).
+
+    Returns a diagnostics string for repair feedback, or "" when clean or the
+    rules engine is unavailable (never blocks on its own absence).
+    """
+    try:
+        from rules import RulesEngine, RulesConfig
+    except Exception:  # noqa: BLE001
+        return ""
+    engine = RulesEngine(RulesConfig(fail_on_warnings=False))
+    lines = []
+    for rel in files_written:
+        fp = (project_dir / rel).resolve()
+        try:
+            report = engine.check_code(fp.read_text(encoding="utf-8"), rel)
+        except OSError:
+            continue
+        for r in report.results:
+            for v in r.violations:
+                if getattr(v.severity, "value", "") == "error":
+                    lines.append(f"{rel}: [{v.rule_name}] {v.message}")
+    return "\n".join(lines)
 
 
 def _commit(workspace: Path, files: List[str], task_title: str,
@@ -316,6 +342,33 @@ def _commit(workspace: Path, files: List[str], task_title: str,
         return None
 
 
+def _ordered_tasks(run_tasks: List[Task]) -> List[Task]:
+    """Order tasks so every task runs after its `depends_on` (Kahn's algorithm).
+
+    Only deps that are themselves in `run_tasks` constrain ordering — deps
+    outside the set (done in a prior run, or deliberately excluded via
+    task_ids) are ignored. Stable: ties keep the original task order. Raises on
+    a dependency cycle (the schema validates deps exist but not acyclicity).
+    """
+    by_id = {t.id: t for t in run_tasks}
+    indeg = {t.id: sum(1 for d in t.depends_on if d in by_id) for t in run_tasks}
+    ready = [t.id for t in run_tasks if indeg[t.id] == 0]
+    ordered: List[Task] = []
+    while ready:
+        tid = ready.pop(0)
+        ordered.append(by_id[tid])
+        for t in run_tasks:
+            if tid in t.depends_on and indeg.get(t.id, 0) > 0:
+                indeg[t.id] -= 1
+                if indeg[t.id] == 0:
+                    ready.append(t.id)
+    if len(ordered) != len(run_tasks):
+        seen = {t.id for t in ordered}
+        stuck = sorted(t.id for t in run_tasks if t.id not in seen)
+        raise RuntimeError(f"Dependency cycle among tasks: {stuck}")
+    return ordered
+
+
 def run_implementation(
     spec_store: SpecStore,
     spec_id: str,
@@ -323,6 +376,7 @@ def run_implementation(
     agent_name: str = "fullstack_developer",
     task_ids: Optional[List[str]] = None,
     llm_call: Callable = _default_llm_call,
+    repair_budget: int = 2,
 ) -> ImplementRunResult:
     """Drive the full per-task implementation loop.
 
@@ -344,7 +398,7 @@ def run_implementation(
         framework = detect(spec_dir)
 
     wanted_ids = set(task_ids) if task_ids else {t.id for t in tasks.tasks}
-    run_tasks = [t for t in tasks.tasks if t.id in wanted_ids]
+    run_tasks = _ordered_tasks([t for t in tasks.tasks if t.id in wanted_ids])
 
     schema_dict = TaskImplementation.model_json_schema()
     outcomes: List[TaskOutcome] = []
@@ -360,81 +414,98 @@ def run_implementation(
             test_full.read_text(encoding="utf-8") if test_full.exists() else ""
         )
 
+        # Resolve where the failing test lands in the project (stable across
+        # repair iterations).
+        project_test = (project_dir / task.failing_test_path).resolve()
+        if not str(project_test).startswith(str(project_dir)):
+            project_test = (project_dir / Path(task.failing_test_path).name).resolve()
+        project_test.parent.mkdir(parents=True, exist_ok=True)
+        if test_full.exists() and not project_test.exists():
+            shutil.copy2(test_full, project_test)
+        test_rel = str(project_test.relative_to(project_dir)).replace("\\", "/")
+
+        base_prompt = _build_task_prompt(task, spec, plan, failing_test_source, framework)
+        sys_prompt = (
+            "You are a senior implementer. Output a single TaskImplementation JSON "
+            "object — no prose, no code fence. Files must be COMPLETE contents, "
+            "not diffs. Do not include the failing test in `files` — only "
+            "production code that makes it pass."
+        )
+
         _write_active_task(spec_dir, task.id)
         try:
-            user_task = _build_task_prompt(task, spec, plan, failing_test_source, framework)
-            sys_prompt = (
-                "You are a senior implementer. Output a single TaskImplementation JSON "
-                "object — no prose, no code fence. Files must be COMPLETE contents, "
-                "not diffs. Do not include the failing test in `files` — only "
-                "production code that makes it pass."
-            )
-            try:
-                raw, usage = llm_call(
-                    agent_name, sys_prompt, user_task, None,
-                    response_schema=schema_dict, schema_name="TaskImplementation",
-                )
-            except TypeError:
-                raw, usage = llm_call(agent_name, sys_prompt, user_task, None)
-
-            spec_store.record_phase_cost(spec_id, "implementation_trace", {
-                "task": task.id, "agent": agent_name, **usage,
-            })
-            ti, err = _coerce_task_implementation(raw, task.id)
-            if ti is None:
-                # Persist the raw response for forensic inspection.
-                debug_path = spec_dir / f".debug_{task.id}_raw.txt"
+            # generate -> apply -> verify -> repair, up to repair_budget retries.
+            files_written: List[str] = []
+            test_passed = False
+            last_error = None
+            feedback = ""
+            for attempt in range(repair_budget + 1):
+                user_task = base_prompt + feedback
                 try:
-                    debug_path.write_text(raw, encoding="utf-8")
-                except OSError:
-                    pass
-                outcomes.append(TaskOutcome(
-                    task_id=task.id, fr_ids=task.fr_ids,
-                    files_written=[], test_passed=False, commit_sha=None,
-                    error=f"agent output invalid: {err}; raw saved to {debug_path.name}",
-                ))
-                continue
+                    raw, usage = llm_call(
+                        agent_name, sys_prompt, user_task, None,
+                        response_schema=schema_dict, schema_name="TaskImplementation",
+                    )
+                except TypeError:
+                    raw, usage = llm_call(agent_name, sys_prompt, user_task, None)
+                spec_store.record_phase_cost(spec_id, "implementation_trace", {
+                    "task": task.id, "agent": agent_name, "attempt": attempt, **usage,
+                })
 
-            # Make sure the task_id the agent claimed matches reality.
-            if ti.task_id != task.id:
-                ti = ti.model_copy(update={"task_id": task.id})
+                ti, err = _coerce_task_implementation(raw, task.id)
+                if ti is None:
+                    debug_path = spec_dir / f".debug_{task.id}_raw.txt"
+                    try:
+                        debug_path.write_text(raw, encoding="utf-8")
+                    except OSError:
+                        pass
+                    last_error = f"agent output invalid: {err}; raw saved to {debug_path.name}"
+                    feedback = (
+                        f"\n\nPREVIOUS ATTEMPT was not valid TaskImplementation JSON: "
+                        f"{err}\nReturn ONLY a valid TaskImplementation JSON object."
+                    )
+                    continue
+                if ti.task_id != task.id:
+                    ti = ti.model_copy(update={"task_id": task.id})
 
-            try:
-                files_written = _apply_files(project_dir, ti.files)
-            except ValueError as ve:
-                outcomes.append(TaskOutcome(
-                    task_id=task.id, fr_ids=task.fr_ids,
-                    files_written=[], test_passed=False, commit_sha=None,
-                    error=str(ve),
-                ))
-                continue
+                try:
+                    files_written = _apply_files(project_dir, ti.files)
+                except ValueError as ve:
+                    last_error = str(ve)
+                    feedback = f"\n\nPREVIOUS ATTEMPT could not be applied: {ve}\nFix the file paths/contents."
+                    continue
 
-            # Copy the failing test into the project too, so the runner can find it.
-            project_test = (project_dir / task.failing_test_path).resolve()
-            if not str(project_test).startswith(str(project_dir)):
-                # Path tried to escape via "../" — fall back to filename only.
-                project_test = (project_dir / Path(task.failing_test_path).name).resolve()
-            project_test.parent.mkdir(parents=True, exist_ok=True)
-            if test_full.exists() and not project_test.exists():
-                shutil.copy2(test_full, project_test)
-            test_rel = str(project_test.relative_to(project_dir)).replace("\\", "/")
+                # Verify: the failing test must pass AND no ERROR-level rule
+                # violations in the written code. Lint/typecheck diagnostics are
+                # included as repair hints when the tools are installed.
+                test_passed, test_out = _run_test_verbose(framework, project_dir, test_rel)
+                rule_errs = _rules_errors(project_dir, files_written)
+                if test_passed and not rule_errs:
+                    last_error = None
+                    break
 
-            test_passed = _run_test(framework, project_dir, test_rel)
+                last_error = "verification failed (test or rules)"
+                diag = []
+                if not test_passed:
+                    diag.append(f"FAILING TEST did not pass. Output:\n{test_out[:2500]}")
+                if rule_errs:
+                    diag.append(f"BLOCKING rule violations:\n{rule_errs[:1500]}")
+                feedback = (
+                    "\n\nPREVIOUS ATTEMPT FAILED verification. Fix these and return "
+                    "the COMPLETE corrected files:\n" + "\n\n".join(diag)
+                )
 
             commit_sha = _commit(
-                project_dir,
-                files_written + [test_rel],
-                task.title,
-                task.fr_ids,
-            )
+                project_dir, files_written + [test_rel], task.title, task.fr_ids,
+            ) if files_written else None
 
             outcomes.append(TaskOutcome(
                 task_id=task.id, fr_ids=task.fr_ids,
                 files_written=files_written, test_passed=test_passed,
                 commit_sha=commit_sha,
+                error=None if (test_passed and files_written) else last_error,
             ))
             if commit_sha:
-                # One CommitTrace per FR-ID the task touched (joins fr→commit).
                 for fr in task.fr_ids:
                     commit_traces.append(CommitTrace(
                         fr_id=fr, task_id=task.id, commit_sha=commit_sha,

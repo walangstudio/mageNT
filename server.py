@@ -71,9 +71,12 @@ from agents.development.php_developer import PHPDeveloper
 from agents.development.tui_developer import TUIDeveloper
 from agents.development.cli_installer_developer import CLIInstallerDeveloper
 from agents.development.hono_developer import HonoDeveloper
+from agents.development.refactoring_specialist import RefactoringSpecialist
 
 # Data agents
 from agents.data.database_administrator import DatabaseAdministrator
+from agents.data.data_engineer import DataEngineer
+from agents.data.ml_engineer import MLEngineer
 
 # Quality agents
 from agents.quality.qa_engineer import QAEngineer
@@ -82,11 +85,14 @@ from agents.quality.performance_engineer import PerformanceEngineer
 from agents.quality.automation_qa import AutomationQA
 from agents.quality.sdet import SDET
 from agents.quality.debugging_expert import DebuggingExpert
+from agents.quality.code_reviewer import CodeReviewer
+from agents.quality.accessibility_specialist import AccessibilitySpecialist
 
 # Infrastructure agents
 from agents.infrastructure.devops_engineer import DevOpsEngineer
 from agents.infrastructure.cloud_architect import CloudArchitect
 from agents.infrastructure.cloudflare_expert import CloudflareExpert
+from agents.infrastructure.observability_engineer import ObservabilityEngineer
 
 # Coordination
 from agents.coordination.team_lead import TeamLead
@@ -123,8 +129,11 @@ AGENT_CLASSES = {
     "tui_developer": TUIDeveloper,
     "cli_installer_developer": CLIInstallerDeveloper,
     "hono_developer": HonoDeveloper,
+    "refactoring_specialist": RefactoringSpecialist,
     # Data
     "database_administrator": DatabaseAdministrator,
+    "data_engineer": DataEngineer,
+    "ml_engineer": MLEngineer,
     # Quality
     "qa_engineer": QAEngineer,
     "security_engineer": SecurityEngineer,
@@ -132,10 +141,13 @@ AGENT_CLASSES = {
     "automation_qa": AutomationQA,
     "sdet": SDET,
     "debugging_expert": DebuggingExpert,
+    "code_reviewer": CodeReviewer,
+    "accessibility_specialist": AccessibilitySpecialist,
     # Infrastructure
     "devops_engineer": DevOpsEngineer,
     "cloud_architect": CloudArchitect,
     "cloudflare_expert": CloudflareExpert,
+    "observability_engineer": ObservabilityEngineer,
     # Coordination
     "team_lead": TeamLead,
 }
@@ -171,8 +183,10 @@ class MageNTServer:
         )
         print(f"SDD: {len(self.skill_registry)} skills loaded", file=sys.stderr)
 
-        # Initialize rules engine
-        self.rules_engine = RulesEngine()
+        # Initialize rules engine from the config.yaml `rules:` block (thresholds
+        # + categories + fail_on_warnings). Was previously ignored.
+        self._rules_cfg = self.config_loader.get_rules_config()
+        self.rules_engine = RulesEngine(RulesConfig.from_dict(self._rules_cfg))
         print(f"Rules engine loaded with {len(self.rules_engine.list_rules())} rules", file=sys.stderr)
 
         # Initialize hooks engine
@@ -303,6 +317,10 @@ class MageNTServer:
                                 "type": "array",
                                 "items": {"type": "string"},
                                 "description": "Optional list of categories to check: security, coding_style, testing, git, performance",
+                            },
+                            "profile": {
+                                "type": "string",
+                                "description": "Strictness profile: 'default' (warnings advisory) or 'release' (warnings block). Defaults to 'default'.",
                             },
                         },
                         "required": ["code"],
@@ -531,10 +549,16 @@ class MageNTServer:
                 ),
                 Tool(
                     name="magent_audit",
-                    description="Phase 7. Multi-reviewer audit: delivery_manager + security_engineer + performance_engineer + qa_engineer (parallel) merged into a single Audit schema with phase status + reviewer findings + recommendation.",
+                    description="Phase 7. Multi-reviewer audit: delivery_manager + security_engineer + performance_engineer + qa_engineer + code_reviewer (parallel) merged into a single Audit schema with phase status + reviewer findings + recommendation.",
                     inputSchema={
                         "type": "object",
-                        "properties": {"spec_id": {"type": "string"}},
+                        "properties": {
+                            "spec_id": {"type": "string"},
+                            "project_root": {
+                                "type": "string",
+                                "description": "Optional workspace path. When given, check_code (release profile) is run over the files the implementation trace touched and the violations are handed to the reviewers.",
+                            },
+                        },
                         "required": ["spec_id"],
                     },
                 ),
@@ -958,16 +982,21 @@ class MageNTServer:
                     ]
                 file_path = arguments.get("file_path")
                 categories = arguments.get("categories")
+                profile = arguments.get("profile", "default")
 
-                # Build config if categories specified
+                # A non-default profile (e.g. 'release') or a category filter
+                # builds a transient engine off the file config; otherwise reuse
+                # the shared engine.
                 config = None
-                if categories:
-                    try:
-                        enabled_cats = {RuleCategory(cat) for cat in categories if cat in [c.value for c in RuleCategory]}
-                        if enabled_cats:
-                            config = RulesConfig(enabled_categories=enabled_cats)
-                    except ValueError:
-                        pass
+                if profile != "default" or categories:
+                    config = RulesConfig.from_dict(self._rules_cfg, profile=profile)
+                    if categories:
+                        try:
+                            enabled_cats = {RuleCategory(cat) for cat in categories if cat in [c.value for c in RuleCategory]}
+                            if enabled_cats:
+                                config.enabled_categories = enabled_cats
+                        except ValueError:
+                            pass
 
                 engine = RulesEngine(config) if config else self.rules_engine
                 report = engine.check_code(code, file_path)
@@ -1419,7 +1448,7 @@ class MageNTServer:
                 from agents.spec_schemas import (
                     Constitution, FeatureSpec, ClarificationLog,
                     ImplementationPlan, TaskList, ImplementationTrace,
-                    Audit, SpecDelta,
+                    Audit, ReviewerFinding, SpecDelta,
                 )
                 try:
                     if name == "magent_validate":
@@ -1704,15 +1733,25 @@ class MageNTServer:
 
                     elif name == "magent_audit":
                         spec_id = arguments["spec_id"]
+                        project_root = arguments.get("project_root")
                         spec = require_artifact(self.spec_store, spec_id, "feature_spec")
                         plan = require_artifact(self.spec_store, spec_id, "plan")
                         trace = require_artifact(self.spec_store, spec_id, "implementation_trace")
+                        ctx_artifacts = {"feature_spec": spec, "plan": plan,
+                                         "implementation_trace": trace}
+                        # Ground reviewers in the rules engine: run check_code
+                        # (release profile) over the files the trace touched and
+                        # hand the violations to every reviewer. Needs the
+                        # workspace; skipped (no behaviour change) without it.
+                        cq = self._grounded_code_quality(trace, project_root)
+                        if cq is not None:
+                            ctx_artifacts["code_quality"] = cq
                         result = run_multi_agent_phase(
                             spec_store=self.spec_store, spec_id=spec_id,
                             kind="audit",
                             agent_names=[
                                 "delivery_manager", "security_engineer",
-                                "performance_engineer", "qa_engineer",
+                                "performance_engineer", "qa_engineer", "code_reviewer",
                             ],
                             merger_agent="delivery_manager",
                             user_intent=(
@@ -1720,12 +1759,31 @@ class MageNTServer:
                                 "an Audit with phases (Requirements/Design/Development/Test/"
                                 "Security/Performance/Docs/Deployment/Rollback/Monitoring), "
                                 "reviewer_findings (one per agent, blocking flag set when the "
-                                "issue must be fixed pre-release), and recommendation."
+                                "issue must be fixed pre-release), and recommendation. When a "
+                                "code_quality artifact is present, ground Development/Security/"
+                                "Test findings in its violations."
                             ),
-                            context_artifacts={"feature_spec": spec, "plan": plan,
-                                                "implementation_trace": trace},
+                            context_artifacts=ctx_artifacts,
                             agent_registry=self.agent_registry,
                         )
+                        # Deterministic incompleteness gate: if a reviewer never
+                        # responded, the audit ran on partial input — force the
+                        # persisted Audit off GO and record the gap so
+                        # magent_release blocks regardless of what the merger said.
+                        missing = getattr(result, "failed_contributors", []) or []
+                        if missing:
+                            audit_model = result.model
+                            if audit_model.recommendation == "GO":
+                                audit_model.recommendation = "NO-GO"
+                            for rv in missing:
+                                if rv in ("delivery_manager", "security_engineer",
+                                          "performance_engineer", "qa_engineer", "code_reviewer"):
+                                    audit_model.reviewer_findings.append(ReviewerFinding(
+                                        reviewer=rv,
+                                        summary=f"{rv} did not respond; audit incomplete — re-run before release.",
+                                        blocking=True,
+                                    ))
+                            self.spec_store.save_artifact(spec_id, "audit", audit_model)
 
                     elif name == "magent_release":
                         spec_id = arguments["spec_id"]
@@ -1803,6 +1861,47 @@ class MageNTServer:
                         text=f"Error: Unknown tool '{name}'",
                     )
                 ]
+
+    def _grounded_code_quality(self, trace, project_root):
+        """Run check_code (release profile) over files the trace touched.
+
+        Returns a compact, JSON-serialisable dict of per-file violations for
+        injection into the audit reviewers' context, or None when there's no
+        workspace to read or nothing flagged.
+        """
+        if not project_root:
+            return None
+        from pathlib import Path as _Path
+        root = _Path(project_root).resolve()
+        if not root.is_dir():
+            return None
+        files = []
+        seen = set()
+        for c in getattr(trace, "commits", []) or []:
+            for f in getattr(c, "files", []) or []:
+                if f not in seen:
+                    seen.add(f)
+                    files.append(f)
+        if not files:
+            return None
+        engine = RulesEngine(RulesConfig.from_dict(self._rules_cfg, profile="release"))
+        flagged = {}
+        for rel in files:
+            fp = (root / rel).resolve()
+            try:
+                if not str(fp).startswith(str(root)) or not fp.is_file():
+                    continue
+                report = engine.check_code(fp.read_text(encoding="utf-8"), rel)
+            except OSError:
+                continue
+            if not report.passed:
+                flagged[rel] = [
+                    {"rule": v.rule_name, "severity": v.severity.value, "message": v.message}
+                    for r in report.results if not r.passed for v in r.violations
+                ]
+        if not flagged:
+            return None
+        return {"profile": "release", "files_checked": len(files), "violations": flagged}
 
     def _build_session_summary(self) -> str:
         if not self._session_actions:
