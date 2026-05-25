@@ -24,6 +24,14 @@ from .git_workflow import GIT_WORKFLOW_RULES
 from .performance import PERFORMANCE_RULES
 
 
+# Named strictness profiles overlaid on the file config. "release" treats
+# warnings as blocking so a release-time gate is stricter than dev-time.
+_RULE_PROFILES: Dict[str, Dict[str, Any]] = {
+    "default": {"fail_on_warnings": False},
+    "release": {"fail_on_warnings": True},
+}
+
+
 @dataclass
 class RulesConfig:
     """Configuration for the rules engine."""
@@ -47,6 +55,40 @@ class RulesConfig:
 
     # Whether to fail on warnings
     fail_on_warnings: bool = False
+
+    @classmethod
+    def from_dict(cls, rules_cfg: Optional[Dict[str, Any]], profile: str = "default") -> "RulesConfig":
+        """Build a config from the config.yaml `rules:` block.
+
+        `rule_settings` is keyed by friendly rule name (e.g. file-size-limit) —
+        `_initialize_rules` resolves those against each rule's `.name`. The
+        `profile` overlay (see `_RULE_PROFILES`) wins over the file's
+        `fail_on_warnings`, so a "release" check is stricter than dev-time.
+        """
+        cfg = rules_cfg or {}
+        cats_cfg = cfg.get("categories") or {}
+        if cats_cfg:
+            enabled = {
+                RuleCategory(n) for n, on in cats_cfg.items()
+                if on and n in RuleCategory._value2member_map_
+            }
+        else:
+            enabled = {c for c in RuleCategory}
+        try:
+            min_sev = RuleSeverity(cfg.get("min_severity", "info"))
+        except ValueError:
+            min_sev = RuleSeverity.INFO
+        overlay = _RULE_PROFILES.get(profile, {})
+        fail_on_warnings = overlay.get(
+            "fail_on_warnings", bool(cfg.get("fail_on_warnings", False))
+        )
+        return cls(
+            enabled_categories=enabled or {c for c in RuleCategory},
+            disabled_rules=set(cfg.get("disabled_rules", []) or []),
+            min_severity=min_sev,
+            rule_configs=dict(cfg.get("rule_settings") or {}),
+            fail_on_warnings=fail_on_warnings,
+        )
 
 
 @dataclass
@@ -175,12 +217,17 @@ class RulesEngine:
         """Initialize rule instances based on configuration."""
         for category, rule_classes in self.ALL_RULES.items():
             for rule_class in rule_classes:
-                # Get rule-specific config if any
-                rule_config = self.config.rule_configs.get(rule_class.__name__, {})
-
-                # Create instance
+                # Resolve rule-specific config by friendly name (config.yaml
+                # rule_settings) first, then class name (back-compat). Probe a
+                # default instance to read `.name` before applying overrides.
                 try:
-                    rule = rule_class(**rule_config) if rule_config else rule_class()
+                    probe = rule_class()
+                    rule_config = (
+                        self.config.rule_configs.get(probe.name)
+                        or self.config.rule_configs.get(rule_class.__name__)
+                        or {}
+                    )
+                    rule = rule_class(**rule_config) if rule_config else probe
                     self._rule_instances[rule.name] = rule
                 except Exception as e:
                     # Log error but continue

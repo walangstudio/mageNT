@@ -185,6 +185,40 @@ is **mandatory, not optional**: the lead must not report a teammate as
 after a teammate ignores two nudges does the lead escalate to the user, naming
 the teammate and the outstanding `request_id`.
 
+### Multiplexers & pane teardown (tmux, iTerm2, in-process)
+
+A teammate's shutdown action is **the same on every backend** — it sends the
+`shutdown_response` object, nothing more. Closing the window is the Claude Code
+runtime's job, not mageNT's: mageNT ships no tmux/iTerm2 code and issues no
+teardown shell command. The `shutdown_approved` the framework emits carries
+`paneId` and `backendType`, which is what its teardown branches on
+(verified live: on Windows both are `"in-process"`). So there is **no
+per-multiplexer instruction for a teammate** — do not add one; the handshake is
+backend-agnostic.
+
+Which backend runs is set by `settings.json` `"teammateMode"`
+(`"auto"` | `"in-process"` | `"tmux"`) or `--teammate-mode`. Claude Code
+split-pane mode supports **tmux** (macOS/Linux) and **iTerm2** (macOS only, via
+the [`it2` CLI](https://github.com/mkusaka/it2)); `"auto"` uses split panes only
+when already inside a tmux session and **in-process** (no panes) otherwise.
+**Windows has no tmux/iTerm2 — it is always in-process**, so panes never appear
+and there is nothing to close.
+
+Teardown by backend:
+
+- **tmux** — framework runs `kill-pane`; the pane closes cleanly on a normal
+  shutdown.
+- **in-process** — no pane exists; the session just ends.
+- **iTerm2** — **known upstream bug**
+  ([claude-code#24385](https://github.com/anthropics/claude-code/issues/24385)):
+  the framework reports `teammate_terminated` but never calls the iTerm2
+  `async_close()`, so the pane lingers with a dead shell. mageNT cannot fix this
+  from a prompt — it is in the runtime. A lingering iTerm2 pane **after a clean
+  `teammate_terminated` is this bug, not an incomplete handshake**: close it
+  manually, or run teams under tmux / in-process mode until it's fixed
+  upstream. (Contrast: a pane that lingers with the teammate *still alive* is
+  the idle-vs-shutdown miss above — fix that with the lead nudge.)
+
 ## Caveats
 
 - **Teammates do not inherit `skills` or `mcpServers`** from the subagent

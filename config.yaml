@@ -605,6 +605,8 @@ rules:
       max_lines: 50
     test-coverage-minimum:
       min_coverage: 80
+    mutation-score-minimum:
+      min_score: 60
 hooks:
   enabled: true
   disabled_hooks: []

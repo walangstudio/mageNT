@@ -1,0 +1,64 @@
+# Coding eval tasks — objective pass@1 via test execution (not a judge).
+# Each task: the model must produce the full contents of `solution_file`; the
+# hidden `test` (the model never sees it) decides pass/fail.
+tasks:
+  - id: 1
+    title: fizzbuzz
+    agent: python_backend
+    language: python
+    solution_file: solution.py
+    test_file: test_solution.py
+    runner: "python -m pytest test_solution.py -q"
+    prompt: |
+      Implement `fizzbuzz(n: int) -> str` in solution.py:
+      - "Fizz" if n divisible by 3, "Buzz" if divisible by 5, "FizzBuzz" if both,
+        otherwise the number as a string. Raise ValueError for n < 1.
+    test: |
+      import pytest
+      from solution import fizzbuzz
+      def test_basic():
+          assert fizzbuzz(1) == "1"
+          assert fizzbuzz(3) == "Fizz"
+          assert fizzbuzz(5) == "Buzz"
+          assert fizzbuzz(15) == "FizzBuzz"
+      def test_invalid():
+          with pytest.raises(ValueError):
+              fizzbuzz(0)
+
+  - id: 2
+    title: parse key=value query string
+    agent: python_backend
+    language: python
+    solution_file: solution.py
+    test_file: test_solution.py
+    runner: "python -m pytest test_solution.py -q"
+    prompt: |
+      Implement `parse_qs(s: str) -> dict` in solution.py that parses an
+      "a=1&b=2" style string into {"a": "1", "b": "2"}. An empty string returns
+      {}. A key with no '=' maps to "". Later duplicate keys win.
+    test: |
+      from solution import parse_qs
+      def test_parse():
+          assert parse_qs("") == {}
+          assert parse_qs("a=1&b=2") == {"a": "1", "b": "2"}
+          assert parse_qs("a") == {"a": ""}
+          assert parse_qs("a=1&a=2") == {"a": "2"}
+
+  - id: 3
+    title: balanced brackets
+    agent: python_backend
+    language: python
+    solution_file: solution.py
+    test_file: test_solution.py
+    runner: "python -m pytest test_solution.py -q"
+    prompt: |
+      Implement `is_balanced(s: str) -> bool` in solution.py that returns True
+      iff (), [], {} are correctly nested and balanced. Ignore other chars.
+    test: |
+      from solution import is_balanced
+      def test_balanced():
+          assert is_balanced("()[]{}") is True
+          assert is_balanced("([{}])") is True
+          assert is_balanced("(]") is False
+          assert is_balanced("([)]") is False
+          assert is_balanced("a(b)c") is True

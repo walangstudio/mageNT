@@ -283,6 +283,7 @@ class PhaseAudit(_Strict):
 class ReviewerFinding(_Strict):
     reviewer: Literal[
         "delivery_manager", "security_engineer", "performance_engineer", "qa_engineer",
+        "code_reviewer",
     ]
     summary: str = Field(..., min_length=10)
     blocking: bool

@@ -89,6 +89,89 @@ go test -coverprofile=coverage.out ./...
 - Recently changed code"""
 
 
+class MutationScoreRule(BaseRule):
+    """Check that the mutation score meets a minimum threshold.
+
+    Coverage proves lines ran; mutation score proves the tests would fail if
+    the code were wrong. Metadata-driven like TestCoverageRule: reads
+    `metadata['mutation_score']` (a percent), supplied by the runner after a
+    mutmut / Stryker / PIT run. Absent => pass (advisory).
+    """
+
+    DEFAULT_MIN_SCORE = 60
+
+    def __init__(self, min_score: int = None):
+        self._min_score = min_score or self.DEFAULT_MIN_SCORE
+
+    @property
+    def name(self) -> str:
+        return "mutation-score-minimum"
+
+    @property
+    def description(self) -> str:
+        return f"Mutation score should be at least {self._min_score}%"
+
+    @property
+    def category(self) -> RuleCategory:
+        return RuleCategory.TESTING
+
+    @property
+    def severity(self) -> RuleSeverity:
+        return RuleSeverity.WARNING
+
+    def check(self, context: RuleContext) -> RuleResult:
+        score = context.metadata.get("mutation_score")
+
+        if score is None:
+            return RuleResult(
+                rule_name=self.name,
+                passed=True,
+                message="No mutation data provided (run a mutation test to check)",
+            )
+
+        if score < self._min_score:
+            return RuleResult(
+                rule_name=self.name,
+                passed=False,
+                violations=[
+                    RuleViolation(
+                        rule_name=self.name,
+                        message=f"Mutation score is {score}%, minimum required is {self._min_score}%",
+                        severity=self.severity,
+                        suggestion="Surviving mutants mean tests don't assert behaviour — strengthen assertions, don't just add coverage",
+                    )
+                ],
+                message=f"Mutation score {score}% is below minimum {self._min_score}%",
+            )
+
+        return RuleResult(
+            rule_name=self.name,
+            passed=True,
+            message=f"Mutation score is {score}% (meets {self._min_score}% minimum)",
+        )
+
+    def get_guidance(self) -> str:
+        return f"""**mutation-score-minimum**: Keep mutation score at or above {self._min_score}%.
+
+Coverage % is a smoke alarm; mutation score is the smoke detector — it proves
+the suite actually catches bugs, not just executes lines.
+
+**Running mutation tests:**
+```bash
+# Python
+mutmut run
+
+# JavaScript/TypeScript
+npx stryker run
+
+# Java
+mvn org.pitest:pitest-maven:mutationCoverage
+```
+
+A surviving mutant is a test gap: the code was changed and no test failed. Fix
+it by strengthening assertions, not by adding lines of coverage."""
+
+
 class TestNamingRule(BaseRule):
     """Check that test functions follow naming conventions."""
 
@@ -428,6 +511,7 @@ expect(() => fn()).toThrow(ValidationError);
 # Export all testing rules
 TESTING_RULES = [
     TestCoverageRule,
+    MutationScoreRule,
     TestNamingRule,
     TestFileExistsRule,
     AssertionQualityRule,

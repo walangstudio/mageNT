@@ -14,6 +14,9 @@ from skills.security.security_scan import SecurityScan
 from skills.testing.generate_tests import GenerateTests
 from skills.testing.run_tests import RunTests
 from skills.version.check_versions import CheckVersions
+from skills.quality import (
+    Lint, TypeCheck, FormatCode, MutationTest, DependencyAudit,
+)
 
 # Agent → skill names they can use
 AGENT_SKILL_AFFINITIES: Dict[str, List[str]] = {
@@ -37,8 +40,9 @@ AGENT_SKILL_AFFINITIES: Dict[str, List[str]] = {
     "ios_developer": ["generate_tests", "debug_code"],
     "qa_engineer": ["generate_tests", "run_tests", "analyze_error"],
     "automation_qa": ["generate_tests", "run_tests", "analyze_error"],
-    "sdet": ["generate_tests", "run_tests", "debug_code", "analyze_error"],
-    "security_engineer": ["security_scan", "analyze_error"],
+    "sdet": ["generate_tests", "run_tests", "debug_code", "analyze_error",
+             "lint", "typecheck", "mutation_test"],
+    "security_engineer": ["security_scan", "analyze_error", "dependency_audit"],
     "debugging_expert": ["debug_code", "analyze_error"],
     "performance_engineer": ["run_tests", "analyze_error"],
     "devops_engineer": ["run_tests", "check_versions"],
@@ -67,6 +71,11 @@ TECH_KEYWORDS: Dict[str, List[str]] = {
     "debug_code": ["debug", "troubleshoot", "error handling", "logging"],
     "analyze_error": ["error", "exception", "stack trace", "bug", "crash"],
     "check_versions": ["version", "dependency", "upgrade", "migration", "compatibility"],
+    "lint": ["lint", "linter", "code style", "eslint", "ruff", "clippy"],
+    "typecheck": ["type check", "type-check", "mypy", "tsc", "type safety"],
+    "format": ["format", "formatter", "prettier", "black", "gofmt", "rustfmt"],
+    "mutation_test": ["mutation", "mutmut", "stryker", "mutation score", "test effectiveness"],
+    "dependency_audit": ["vulnerability", "cve", "audit", "supply chain", "advisory"],
 }
 
 
@@ -83,6 +92,11 @@ def build_skill_registry() -> Dict[str, BaseSkill]:
         GenerateTests(),
         RunTests(),
         CheckVersions(),
+        Lint(),
+        TypeCheck(),
+        FormatCode(),
+        MutationTest(),
+        DependencyAudit(),
     ]
     return {skill.name: skill for skill in skills}
 

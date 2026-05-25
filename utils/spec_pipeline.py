@@ -20,7 +20,7 @@ functions — no business logic in the handler.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -52,6 +52,9 @@ class PhaseResult:
     attempts: int                    # how many LLM calls this phase took
     raw_response: str                # last response (debug)
     cost: Dict[str, Any]             # provider usage if available
+    # Multi-agent phases only: contributors that failed (after one retry) and
+    # were excluded from the merge. Non-empty => the phase ran on partial input.
+    failed_contributors: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -291,24 +294,39 @@ def run_multi_agent_phase(
             return agent.get_system_prompt()
         return f"You are the {name} agent. Provide expert input on the request."
 
-    def _one(name: str) -> Tuple[str, str, Dict[str, Any]]:
+    def _one(name: str) -> Tuple[str, Optional[str], Dict[str, Any]]:
         sys_p = _build_sys_prompt(name)
-        try:
-            text, usage = llm_call(name, sys_p, user_intent, ctx)
-        except TypeError:
-            text, usage = llm_call(name, sys_p, user_intent, ctx)
-        return name, text, usage
+        last_exc: Optional[Exception] = None
+        for _ in range(2):  # one retry before giving up on this contributor
+            try:
+                text, usage = llm_call(name, sys_p, user_intent, ctx)
+                return name, text, usage
+            except Exception as exc:  # noqa: BLE001 — capture so one slow/failed
+                last_exc = exc            # reviewer can't crash the whole phase
+        return name, None, {"error": str(last_exc)[:300]}
 
     contributions: Dict[str, str] = {}
+    failed: List[str] = []
     from concurrent.futures import ThreadPoolExecutor
     # Cap concurrency so we don't overload local LLM endpoints (LM Studio,
     # Ollama) which often only run one model at a time. 4 is comfortable.
     with ThreadPoolExecutor(max_workers=min(len(agent_names), 4)) as pool:
         for name, text, usage in pool.map(_one, agent_names):
-            contributions[name] = text
             spec_store.record_phase_cost(spec_id, kind, {
-                "phase_role": "contributor", "agent": name, **usage,
+                "phase_role": "contributor", "agent": name,
+                "failed": text is None, **usage,
             })
+            if text is None:
+                failed.append(name)
+            else:
+                contributions[name] = text
+
+    if not contributions:
+        raise PhaseEscalation(
+            spec_id=spec_id, kind=kind,
+            last_error=f"all contributors failed: {failed}",
+            attempts=len(agent_names) * 2,
+        )
 
     merger_intent = (
         f"{user_intent}\n\nConsolidate the following expert contributions into "
@@ -316,8 +334,17 @@ def run_multi_agent_phase(
         f"naming the trade-off accepted.\n\n"
         + "\n\n".join(f"--- {name} ---\n{text}" for name, text in contributions.items())
     )
+    if failed:
+        # Don't let a missing perspective slip through as an unconditional pass.
+        merger_intent += (
+            f"\n\nWARNING — these contributors did NOT respond and their input is "
+            f"MISSING above: {', '.join(failed)}. Treat the result as INCOMPLETE: "
+            f"do not issue an unconditional GO/approval. Where the schema has a "
+            f"recommendation, use NO-GO or GO-WITH-CONDITIONS and record the "
+            f"missing review as a blocking finding."
+        )
 
-    return run_single_agent_phase(
+    res = run_single_agent_phase(
         spec_store=spec_store,
         spec_id=spec_id,
         kind=kind,
@@ -327,6 +354,8 @@ def run_multi_agent_phase(
         agent_registry=agent_registry,
         llm_call=llm_call,
     )
+    res.failed_contributors = failed
+    return res
 
 
 # ----- Gate helpers --------------------------------------------------------

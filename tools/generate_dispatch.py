@@ -203,12 +203,19 @@ _TEAMS_IMPLEMENTER = ["Read", "Grep", "Glob", "Bash", "Edit", "Write"]
 # analysis); Edit/Write deliberately withheld.
 _TEAMS_ADVISORY = ["Read", "Grep", "Glob", "Bash"]
 
+# Network tools, granted per-agent only. Egress is a prompt-injection vector,
+# so this is never blanket-added — only roles with a concrete lookup need.
+_WEB = ["WebFetch", "WebSearch"]
+
 TEAMS_TOOLS = {
     "business_analyst": _TEAMS_ADVISORY,
     "product_manager": _TEAMS_ADVISORY,
-    "security_engineer": _TEAMS_ADVISORY,
+    # Advisory + web: check CVE databases / advisories during a review.
+    "security_engineer": _TEAMS_ADVISORY + _WEB,
     "ui_ux_designer": _TEAMS_ADVISORY,
     "team_lead": _TEAMS_ADVISORY,
+    # General code reviewer: reports findings, never writes the fix (read-only).
+    "code_reviewer": _TEAMS_ADVISORY,
     # Docs-capable advisors: their deliverable IS a committed file (ADR,
     # design doc, release decision/runbook). The auditability rule is "don't
     # hand-write the CODE fix you recommend" — role-enforced in the prompt,
@@ -221,9 +228,15 @@ TEAMS_TOOLS = {
     # Python implementer: many Python codebases ship .ipynb; NotebookEdit lets
     # it modify cells without losing kernel metadata.
     "python_backend": _TEAMS_IMPLEMENTER + ["NotebookEdit"],
+    # Implementer + web: look up library bugs / upstream issues during RCA.
+    "debugging_expert": _TEAMS_IMPLEMENTER + _WEB,
+    # Implementer + web: check package registries / version availability.
+    "cli_installer_developer": _TEAMS_IMPLEMENTER + _WEB,
 }
-# Every other agent (all framework devs + qa/automation/sdet/perf/debugging +
-# cloud_architect/database_administrator/devops_engineer) is an implementer.
+# Every other agent (all framework devs + qa/automation/sdet/perf +
+# cloud_architect/database_administrator/devops_engineer) falls through to the
+# implementer default. WebFetch/WebSearch are added only to the three agents
+# above; no agent is granted the spawn (Agent) tool.
 
 
 def render_subagent(
