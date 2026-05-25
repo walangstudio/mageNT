@@ -6,6 +6,37 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.3] - 2026-05-24
+
+### Fixed
+
+- Teammates still idled instead of acking protocol messages — not specific to
+  any role; every agent shares the same `TEAM_CONTEXT_BLOCK`. Added rule 0
+  (PROTOCOL MESSAGES FIRST): at the start of every turn, before new work, a
+  `shutdown_request` or `plan_approval_request` is answered first. For shutdown
+  it defers to rule 5's sequencing — close the open ledger task
+  (`TaskUpdate` -> completed), then send `shutdown_response` — so a teammate
+  cannot ack shutdown while leaving a task `in_progress`.
+- Generalized the handshake to `plan_approval_request`: rule 5 now gives the
+  literal `plan_approval_response` payload (`approve` + `feedback`), matching
+  the framework's protocol-response schema.
+
+### Changed
+
+- `magent-team_lead` nudge is now mandatory, not optional: the lead must not
+  report a teammate as "parked"/unresponsive until it has sent the literal
+  nudge payload and repeated it once; escalate only after two ignored nudges,
+  naming the teammate and outstanding `request_id`. Same cycle covers a missed
+  `plan_approval_request`.
+- `docs/AGENT_TEAMS.md` documents protocol-first handling and the mandatory
+  nudge cycle.
+
+### Docs
+
+- README agent counts synced to the current roster: 37 → 39 agents (after
+  `hono_developer` + `cloudflare_expert`), and the `subagents` profile count
+  11 → 13.
+
 ## [0.7.2] - 2026-05-19
 
 ### Fixed

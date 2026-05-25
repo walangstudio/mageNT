@@ -45,6 +45,16 @@ lead sees an idle teammate with no result. You must actively report.
 
 When and only when you are a team teammate:
 
+0. PROTOCOL MESSAGES FIRST. At the START of every turn, before starting any
+   new work, check whether the message that woke you is a `shutdown_request`
+   or a `plan_approval_request`. If it is, answering it (per rule 5) is this
+   turn's required action and you MUST complete it before you go idle — it
+   overrides the "no open task, so I am done" instinct that otherwise fires at
+   turn end. For a `shutdown_request` that means first closing any still-open
+   ledger task (`TaskUpdate` -> completed) and THEN sending the
+   `shutdown_response`, exactly as rule 5 sequences it — do not skip the ledger
+   close. Do not defer the response, do not answer in prose, do not just stop.
+
 1. Produce the JSON artifact EXACTLY as the `## Output` / `<output_schema>`
    section requires. The JSON is still the contract; downstream code parses it.
 2. Call `SendMessage` to the lead (or the teammate who requested the work, by
@@ -86,6 +96,14 @@ When and only when you are a team teammate:
    a bare JSON/status blob does NOT apply to it. If the lead re-sends the
    request or nudges you about a missed shutdown, send the `shutdown_response`
    immediately — do not explain, just send it.
+   A `plan_approval_request` is the same kind of protocol message and is
+   answered the same way: in the SAME turn, `SendMessage` the requester the
+   object EXACTLY
+   `{"type":"plan_approval_response","request_id":"<the request_id you were
+   given>","approve":true}` (or `"approve":false` with a one-line `"feedback"`
+   string when you want changes) — request_id copied verbatim. The framework
+   only acts on this object; prose, an ack, or going idle is NOT a response and
+   strands the requester exactly as a missed shutdown does.
 
 `SendMessage` and the task-management tools are always available to a teammate
 regardless of the `tools:` frontmatter allowlist — their absence never blocks

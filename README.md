@@ -1,6 +1,6 @@
 # mageNT
 
-![version](https://img.shields.io/badge/version-0.7.2-blue)
+![version](https://img.shields.io/badge/version-0.7.3-blue)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
@@ -16,7 +16,7 @@ Ever wish Claude had deep expertise in specific areas? That's what mageNT does. 
 - Building a React app? Get the React Developer
 - Designing an API? Ask the API Developer
 
-Think of it like having 37 specialists on standby — Principals, Staff, and Senior engineers picked per role, plus a team-lead coordinator — each with their own specialty. You can also run a full spec-driven development cycle — from requirements to parallel implementation to delivery audit — with a single tool call per step, or spawn a parallel team of teammates in Claude Code (v2.1.32+).
+Think of it like having 39 specialists on standby — Principals, Staff, and Senior engineers picked per role, plus a team-lead coordinator — each with their own specialty. You can also run a full spec-driven development cycle — from requirements to parallel implementation to delivery audit — with a single tool call per step, or spawn a parallel team of teammates in Claude Code (v2.1.32+).
 
 ## What's new in 0.7
 
@@ -191,13 +191,13 @@ Per-agent dispatch lives in [`config/dispatch.yaml`](config/dispatch.yaml). Mark
 | `--profile` | What it emits |
 |---|---|
 | `full` (default) | Both subagents AND skills per dispatch.yaml |
-| `subagents` | Only the 11 agents marked `subagent` in dispatch.yaml |
+| `subagents` | Only the 13 agents marked `subagent` in dispatch.yaml |
 | `skills` | Only the 4 agents marked `skill` + the 10 scaffold/test/debug skills |
-| `teams` | All 37 agents as subagents (for agent-teams use) |
+| `teams` | All 39 agents as subagents (for agent-teams use) |
 
 #### What you lose by skipping MCP
 
-If you install with `--mode subagents` or `--mode skills` (no MCP), you keep all 37 subagents and the standalone scaffold/test/debug skills, but you lose:
+If you install with `--mode subagents` or `--mode skills` (no MCP), you keep all 39 subagents and the standalone scaffold/test/debug skills, but you lose:
 
 - The full **spec pipeline**: `magent_constitution → magent_spec → magent_clarify → magent_plan → magent_tasks → magent_implement → magent_audit → magent_release`. The `/magent-spec` etc. slash-command wrappers exist as skill files but their bodies invoke MCP tools — without MCP they're dead pointers.
 - **`run_parallel_agents`** (concurrent agent orchestration with skill-affinity auto-selection)
@@ -328,7 +328,7 @@ Consult the Security Engineer about this auth code
 
 ## Who's on the Team
 
-37 agents across different areas. Each has a baked seniority level (Principal / Staff / Senior / specialist) that drives both the system-prompt role line and — in Claude Code agent teams — the `model:` selection (Principal/Staff → Opus, Senior/specialist → Sonnet).
+39 agents across different areas. Each has a baked seniority level (Principal / Staff / Senior / specialist) that drives both the system-prompt role line and — in Claude Code agent teams — the `model:` selection (Principal/Staff → Opus, Senior/specialist → Sonnet).
 
 | What they do | Who's available |
 |----------|--------|
@@ -617,7 +617,7 @@ mageNT/
 ├── server.py                    # MCP server
 ├── config.yaml                  # Your settings
 ├── install.sh / install.bat     # Automated installers
-├── agents/                      # The 37 agents (incl. coordination/team_lead)
+├── agents/                      # The 39 agents (incl. coordination/team_lead)
 │   ├── schemas.py               # Pydantic response schemas for prompt outputs (SecurityReport, ADR, ...)
 │   └── spec_schemas.py          # Pydantic schemas for the magent_* spec lifecycle (Constitution, FeatureSpec, ...)
 ├── skills/                      # Reusable skills (scaffold, test, debug, security, etc.)
