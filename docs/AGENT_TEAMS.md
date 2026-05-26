@@ -219,6 +219,44 @@ Teardown by backend:
   upstream. (Contrast: a pane that lingers with the teammate *still alive* is
   the idle-vs-shutdown miss above — fix that with the lead nudge.)
 
+## Parallel dispatch playbook
+
+Lessons from running 6 specialists in parallel on real backend work. These are
+the LEAD's job — they can't be fixed in the teammate prompt.
+
+- **Pre-create worktrees from the named ref you're on, not default-fresh.** The
+  `Agent` tool's `isolation: "worktree"` defaults to `worktree.baseRef: "fresh"`,
+  which branches from `origin/main`. If your work lives on a feature branch,
+  either create the worktrees yourself —
+  `git worktree add .claude/worktrees/<name> -b agent/<name> <feature-branch>`
+  and pass the path in the briefing — or set `worktree.baseRef: "head"` in
+  settings.json. Otherwise teammates branch from the wrong base.
+- **Brief shared-file edits by line range, not "section name."** Two agents can
+  safely share one file if you name the exact spans (e.g. "imports 15-26" vs
+  "root handler 171-173"). Agents take "the X section" too liberally and
+  collide.
+- **Own the wire-up explicitly.** When a feature spans two files owned by two
+  agents, neither owns the cross-cutting wire-up by default — so it silently
+  doesn't happen (an added API never gets called). Assign one agent the wire-up
+  step, or brief one agent with both files, or run an integration-verification
+  pass after dispatch. This is the single biggest structural risk in parallel
+  dispatch.
+- **Brief "trace upstream/downstream first" for integration-sensitive tasks.**
+  E.g. "before writing the cron, grep all `UPDATE <table>` statements and
+  confirm which column the success path mutates." Agents respect their owned
+  scope literally and skip cross-file research unless told to do it.
+- **Run a code-review pass after parallel dispatch, before merge — mandatory.**
+  Parallel-agent output is materially more defect-dense than single-author code
+  (file-ownership scoping hides cross-cutting bugs; an agent that writes both
+  impl and test can pin a bug as the spec). The review catches no-op wire-ups
+  and integration races that no single teammate could see. Skipping it ships
+  those.
+- **Keep Sonnet as the default; reserve Opus selectively.** Per-agent Opus lifts
+  first-pass correctness only marginally and costs ~5x; it does NOT fix the
+  structural issues above (those are prompt/workflow, now handled by the team
+  protocol block). Use the `staff-implementers` profile (Opus) only for
+  cross-cutting refactors, security/PII/crypto, or perf-critical paths.
+
 ## Caveats
 
 - **Teammates do not inherit `skills` or `mcpServers`** from the subagent

@@ -49,6 +49,9 @@ class HonoDeveloper(BaseAgent):
             "Stream large responses; do not buffer when the runtime supports streaming",
             "Keep the bundle lean — Hono's value is a tiny edge footprint, don't negate it",
             "Use hono/testing for fast unit tests instead of spinning a real server",
+            "In SSR/browser views: navigator.sendBeacon needs a Blob({type:'application/json'}) for JSON — its default text/plain breaks the server parse",
+            "Guard string inputs with `typeof x === 'string' && x.length` rather than `if (!x)`; falsy checks treat '', 0, and undefined alike",
+            "Never interpolate c.env or user input straight into an href/URL in rendered HTML — validate and encode, or you ship traversal/redirect/XSS",
         ]
 
     @property

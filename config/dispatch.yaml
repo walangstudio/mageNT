@@ -165,6 +165,7 @@ skills:
   format:            {mode: skill, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   mutation_test:     {mode: skill, tools: [Read, Grep, Glob, Bash]}
   dependency_audit:  {mode: skill, tools: [Read, Grep, Glob, Bash]}
+  app_store_check:   {mode: skill, tools: [Read, Grep, Glob, Bash]}
 
   # --- Phase 7 spec pipeline skills (slash-command UX wrapping magent_* MCP tools) ---
   magent_constitution:

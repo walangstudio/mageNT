@@ -111,6 +111,10 @@ class CloudflareExpert(BaseAgent):
             "Least-privilege API tokens and scoped Access policies",
             "Separate preview/staging/production environments in wrangler",
             "Observability via Workers logs/Logpush and analytics, wired before launch",
+            "navigator.sendBeacon defaults Content-Type to text/plain — wrap JSON bodies in Blob([body], {type:'application/json'}) or the server rejects/mis-parses",
+            "Validate request tokens with `typeof t === 'string' && t.length > 0`, not truthiness — falsy checks conflate missing, empty, and 0",
+            "Never interpolate an env var (c.env.*) straight into a URL or path; validate/encode it first — a misconfigured var becomes path traversal or open-redirect",
+            "D1 datetime columns are TEXT/INTEGER, not native dates — store ISO-8601 UTC and compare lexically; confirm which column the success path actually writes before filtering on it",
         ]
 
     @property

@@ -65,6 +65,7 @@ class SDET(BaseAgent):
     def decision_heuristics(self) -> List[str]:
         return [
             "Test code is production code. Same review bar, naming standards, and refactor discipline.",
+            "Assert the SPEC, never the current implementation output. Quote the requirement in the test. A test written to match observed behavior green-lights the bug when impl and test are wrong the same way — that is a defect, not coverage.",
             "Each test fails for exactly one reason. Multi-cause failures are a smell.",
             "Don't mock what you own. Use real instances behind a factory; mock only third-party network surfaces.",
             "Use Testcontainers (or equivalent) for any test that needs your real DB, queue, or cache.",

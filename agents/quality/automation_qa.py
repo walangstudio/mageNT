@@ -64,6 +64,7 @@ class AutomationQA(BaseAgent):
         return [
             "Smoke suite must finish under 2 minutes; full E2E under 10. If you can't, parallelise or cut.",
             "No hard-coded sleeps, ever. Use auto-wait / explicit waits.",
+            "Assertions encode the spec, not the current UI/API output. A test snapshotted from buggy behavior just locks the bug in.",
             "Page Object Model is the default; one selector lives in one place.",
             "Mock at the network boundary, not inside your test code, when isolation is needed.",
             "Visual diffs go on the PR, not in nightly reports nobody reads.",
