@@ -8,6 +8,7 @@ from .analysis import DebugCode, AnalyzeError
 from .testing import RunTests, GenerateTests
 from .version import CheckVersions
 from .security import SecurityScan
+from .quality import AppStoreCheck
 
 # Registry of all available skills
 SKILL_REGISTRY = {
@@ -26,6 +27,8 @@ SKILL_REGISTRY = {
     "check_versions": CheckVersions,
     # Security skills
     "security_scan": SecurityScan,
+    # Quality skills
+    "app_store_check": AppStoreCheck,
 }
 
 
@@ -66,4 +69,6 @@ __all__ = [
     "CheckVersions",
     # Security
     "SecurityScan",
+    # Quality
+    "AppStoreCheck",
 ]

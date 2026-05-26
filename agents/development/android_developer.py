@@ -51,6 +51,12 @@ class AndroidDeveloper(BaseAgent):
             "Lint with ktlint and Android Lint; enforce in CI",
             "Test ViewModels with JUnit; use Robolectric for context-dependent tests",
             "Follow Material Design 3 guidelines for UI components",
+            "Meet the Play targetSdkVersion floor (API 35 for new submissions/updates as of 2025-08-31; API 34 to stay available) — under-target uploads are blocked",
+            "Set android:exported explicitly on every activity/service/receiver that has an intent-filter (mandatory targeting API 31+, build fails otherwise)",
+            "Targeting API 34+: declare android:foregroundServiceType on each foreground service AND hold the matching FOREGROUND_SERVICE_* permission, plus declare the type in Play Console",
+            "Sensitive permissions need a Play Console declaration or get the app removed: ACCESS_BACKGROUND_LOCATION, QUERY_ALL_PACKAGES, MANAGE_EXTERNAL_STORAGE, SMS/Call-Log, com.google.android.gms.permission.AD_ID — use scoped <queries> instead of QUERY_ALL_PACKAGES where possible",
+            "Publish as an Android App Bundle (.aab) with Play App Signing; if you ship native .so libs, 16 KB page-alignment is required (since 2025-11-01) — needs AGP 8.5.1+",
+            "Provide a privacy-policy URL and keep declared permissions consistent with the Data safety form",
         ]
 
     @property

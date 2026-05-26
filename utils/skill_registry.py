@@ -15,7 +15,7 @@ from skills.testing.generate_tests import GenerateTests
 from skills.testing.run_tests import RunTests
 from skills.version.check_versions import CheckVersions
 from skills.quality import (
-    Lint, TypeCheck, FormatCode, MutationTest, DependencyAudit,
+    Lint, TypeCheck, FormatCode, MutationTest, DependencyAudit, AppStoreCheck,
 )
 
 # Agent → skill names they can use
@@ -33,11 +33,11 @@ AGENT_SKILL_AFFINITIES: Dict[str, List[str]] = {
     "dotnet_backend": ["generate_tests", "run_tests", "debug_code"],
     "rust_backend": ["generate_tests", "run_tests", "debug_code"],
     "php_developer": ["generate_tests", "debug_code"],
-    "mobile_developer": ["generate_tests", "debug_code"],
-    "flutter_developer": ["generate_tests", "debug_code"],
-    "react_native_developer": ["scaffold_react", "generate_tests", "debug_code"],
-    "android_developer": ["generate_tests", "debug_code"],
-    "ios_developer": ["generate_tests", "debug_code"],
+    "mobile_developer": ["generate_tests", "debug_code", "app_store_check"],
+    "flutter_developer": ["generate_tests", "debug_code", "app_store_check"],
+    "react_native_developer": ["scaffold_react", "generate_tests", "debug_code", "app_store_check"],
+    "android_developer": ["generate_tests", "debug_code", "app_store_check"],
+    "ios_developer": ["generate_tests", "debug_code", "app_store_check"],
     "qa_engineer": ["generate_tests", "run_tests", "analyze_error"],
     "automation_qa": ["generate_tests", "run_tests", "analyze_error"],
     "sdet": ["generate_tests", "run_tests", "debug_code", "analyze_error",
@@ -76,6 +76,7 @@ TECH_KEYWORDS: Dict[str, List[str]] = {
     "format": ["format", "formatter", "prettier", "black", "gofmt", "rustfmt"],
     "mutation_test": ["mutation", "mutmut", "stryker", "mutation score", "test effectiveness"],
     "dependency_audit": ["vulnerability", "cve", "audit", "supply chain", "advisory"],
+    "app_store_check": ["app store", "play store", "ios app", "android app", "submission", "testflight", "info.plist", "androidmanifest", "expo", "react native"],
 }
 
 
@@ -97,6 +98,7 @@ def build_skill_registry() -> Dict[str, BaseSkill]:
         FormatCode(),
         MutationTest(),
         DependencyAudit(),
+        AppStoreCheck(),
     ]
     return {skill.name: skill for skill in skills}
 

@@ -63,6 +63,7 @@ class QAEngineer(BaseAgent):
         return [
             "Test pyramid: many unit, fewer integration, minimal E2E. Push every test as low as it will go.",
             "A bug fix without a failing test that pinned it is rejected.",
+            "Tests assert the SPEC/intent, never the current output. Quote the requirement in the test. A test that pins observed (possibly buggy) behavior locks the bug in as the spec.",
             "Flaky tests are bugs, not noise. Quarantine, then fix, never skip.",
             "Mock what you don't own; use real instances of what you do (Testcontainers > heavy mocking for your own DB).",
             "If two tests would fail for the same bug, keep the one closer to the unit.",

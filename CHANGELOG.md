@@ -6,7 +6,47 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.8.0] - 2026-05-25
+## [0.7.5] - 2026-05-26
+
+### Fixed
+
+- **Agent-teams protocol gate no longer keyed on a deprecated env var.** The
+  `TEAM_CONTEXT_BLOCK` (`tools/generate_dispatch.py`) gated the report/ledger/
+  shutdown protocol on `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and exempted any
+  "one-shot subagent" — so GA teammates spawned via `TeamCreate` + the `Agent`
+  tool (background, worktree-isolated) read themselves as exempt, committed
+  silently, never reported, and never sent `shutdown_response` (orphan
+  processes). The gate is now capability-based (you are a teammate if you can
+  `SendMessage`/`TaskUpdate`, a lead messaged you, or a shared `TaskList`
+  exists) and explicitly covers the GA path. Closes the Wave-7 review's
+  highest-severity findings (silent-commit + orphan-process).
+
+### Added
+
+- **Completion-report rule** in the team protocol: on finishing owned work,
+  `TaskUpdate` → completed and `SendMessage` a prose report (SHA/files/tests) in
+  the same turn, then await shutdown. A commit without a report is not delivered.
+- **Three teammate hygiene rules**: cross-scope minimal edits (no compat shims
+  to dodge a non-owned file), wire-up ownership (an added API isn't done until
+  its call site is wired or handed off), trace-before-code on integration work.
+- **`app_store_check` skill** (`/app-store-check`): static-analysis checklist
+  for Apple App Store + Google Play submission rejection rules (Info.plist
+  purpose strings, `PrivacyInfo.xcprivacy` required-reason APIs, SDK floor;
+  Android `targetSdkVersion`, `android:exported`, foreground-service types,
+  sensitive permissions, 16 KB native alignment). Affinity-linked to the mobile
+  agents.
+- **Test-against-spec discipline** added to `sdet`, `qa_engineer`, and
+  `automation_qa` heuristics (a test that pins observed buggy output green-lights
+  the bug).
+- **Persona enrichment**: `cloudflare_expert` + `hono_developer` platform
+  pitfalls (sendBeacon Content-Type, falsy-vs-typeof guards, env-var URL
+  interpolation, D1 datetime); `ios_developer`/`android_developer`/
+  `react_native_developer` store-submission best practices.
+- **Parallel dispatch playbook** in `docs/AGENT_TEAMS.md` (worktree baseRef,
+  line-range briefing, wire-up ownership, trace-first, mandatory post-dispatch
+  code review, selective-Opus).
+
+## [0.7.4] - 2026-05-25
 
 ### Added
 

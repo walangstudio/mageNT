@@ -1,6 +1,6 @@
 # mageNT
 
-![version](https://img.shields.io/badge/version-0.7.3-blue)
+![version](https://img.shields.io/badge/version-0.7.5-blue)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
@@ -192,7 +192,7 @@ Per-agent dispatch lives in [`config/dispatch.yaml`](config/dispatch.yaml). Mark
 |---|---|
 | `full` (default) | Both subagents AND skills per dispatch.yaml |
 | `subagents` | Only the 15 agents marked `subagent` in dispatch.yaml |
-| `skills` | Only the 4 agents marked `skill` + the 15 scaffold/test/debug/quality skills |
+| `skills` | Only the 4 agents marked `skill` + the 16 scaffold/test/debug/quality skills |
 | `teams` | All 45 agents as subagents (for agent-teams use) |
 
 #### What you lose by skipping MCP

@@ -9,5 +9,9 @@ from .typecheck import TypeCheck
 from .format_code import FormatCode
 from .mutation_test import MutationTest
 from .dependency_audit import DependencyAudit
+from .app_store_check import AppStoreCheck
 
-__all__ = ["Lint", "TypeCheck", "FormatCode", "MutationTest", "DependencyAudit"]
+__all__ = [
+    "Lint", "TypeCheck", "FormatCode", "MutationTest", "DependencyAudit",
+    "AppStoreCheck",
+]

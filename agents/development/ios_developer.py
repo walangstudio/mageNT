@@ -51,6 +51,11 @@ class IOSDeveloper(BaseAgent):
             "Enable strict concurrency checking for Swift 6 compatibility",
             "Use SwiftLint and enforce rules in CI",
             "Test with XCTest; use XCUITest for critical user flows on real devices",
+            "App Store rejection prevention — every privacy-guarded API needs its Info.plist purpose string (NSCameraUsageDescription, NSLocationWhenInUseUsageDescription, NSPhotoLibraryUsageDescription, NSContactsUsageDescription, NSUserTrackingUsageDescription, etc.); a missing/placeholder string is an automatic ITMS-90683 reject",
+            "Ship a PrivacyInfo.xcprivacy declaring required-reason APIs (UserDefaults, file-timestamp, system-boot-time, disk-space, active-keyboard) with valid reason codes; bundled named SDKs must carry their own manifest (ITMS-91053/91055/91061, enforced since 2024)",
+            "Set ITSAppUsesNonExemptEncryption in Info.plist (false for HTTPS-only apps) so the build doesn't stall on the export-compliance prompt",
+            "Any app with account creation must offer in-app account deletion; if you offer third-party/social login, also offer Sign in with Apple (Guidelines 5.1.1(v), 4.8)",
+            "Build with a currently-accepted SDK floor (iOS 18 SDK / Xcode 16 now; iOS 26 SDK from 2026-04-28) — older SDK uploads are rejected",
         ]
 
     @property

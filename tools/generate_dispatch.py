@@ -34,16 +34,26 @@ MAX_DESCRIPTION_LEN = 1024
 
 TEAM_CONTEXT_BLOCK = """## Team Context (Claude Code agent teams)
 
-This section applies ONLY when you run as a teammate in a Claude Code agent
-team (env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1). Outside a team — invoked as
-an MCP tool, a one-shot subagent, or by borch — the JSON-only rule in the
-`## Output` section above stands unchanged: emit JSON only, nothing else.
+This section applies whenever you are spawned as a TEAMMATE — decide from
+signals you can actually observe, NOT from an env var you cannot read. You are
+a teammate if ANY of these is true: you have `SendMessage` and/or `TaskUpdate`
+available; a lead or orchestrator messaged you (a briefing, a
+`shutdown_request`, or a `plan_approval_request`); or a shared `TaskList`
+exists. This INCLUDES modern Claude Code agent teams spawned via `TeamCreate`
+plus the `Agent` tool — with or without `run_in_background`, with or without
+worktree isolation, and regardless of any `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`
+env var. Being a background or worktree-isolated subagent does NOT make you
+"one-shot" or protocol-exempt: if you can `SendMessage`, this protocol binds you.
+The ONLY exemption is a true one-shot with NO `SendMessage` available — a pure
+MCP-tool call or borch passthrough; there the JSON-only rule in the `## Output`
+section above stands unchanged: emit JSON only, nothing else.
 
 In a team you are a SEPARATE session. The lead does NOT receive your final
-message or transcript. If you only emit JSON you have delivered nothing — the
-lead sees an idle teammate with no result. You must actively report.
+message or transcript. If you only emit JSON — or silently commit and go idle —
+you have delivered nothing: the lead sees an idle teammate with no result. You
+must actively report.
 
-When and only when you are a team teammate:
+When you are a team teammate:
 
 0. PROTOCOL MESSAGES FIRST. At the START of every turn, before starting any
    new work, check whether the message that woke you is a `shutdown_request`
@@ -104,6 +114,33 @@ When and only when you are a team teammate:
    string when you want changes) — request_id copied verbatim. The framework
    only acts on this object; prose, an ack, or going idle is NOT a response and
    strands the requester exactly as a missed shutdown does.
+6. REPORT ON COMPLETION — do not idle silently after finishing. The moment your
+   owned work is done (you committed to your branch, wrote the file, reached
+   your verdict), in the SAME turn: (a) `TaskUpdate` your task -> `completed`
+   with a one-line result; (b) `SendMessage` the lead a PROSE report —
+   commit SHA, files touched, and test/typecheck result. THEN go idle and await
+   the `shutdown_request`. A clean commit with no report is NOT delivered work —
+   the lead reconciles from the ledger and your message, never from your
+   branch or transcript, so an unreported commit is invisible to the team.
+7. CROSS-SCOPE MINIMAL EDITS. If a file outside your owned scope needs a
+   one-line import / type / signature update to honor a contract YOUR change
+   introduced, make that minimal edit AND note the cross-scope touch in your
+   report. Do NOT add a backward-compat shim, alias, or duplicate type to avoid
+   touching the other file — that ships type drift and a latent bug. Honoring
+   the contract beats respecting the file boundary literally.
+8. WIRE-UP IS PART OF THE FEATURE. If your change ADDS an API, option, or
+   argument that only takes effect once a call site (often in another teammate's
+   file) passes it, you are NOT done until you either wire it at the call site
+   (when in scope) or `SendMessage` the call-site owner BY NAME with the exact
+   wiring needed. Adding the option without the wire-up is a no-op — the fix
+   achieves nothing at the site that needed it.
+9. TRACE BEFORE YOU CODE on integration-sensitive work (cron handlers, queue
+   consumers, migrations, anything depending on another component's columns,
+   contract, or success path). Grep the upstream/downstream code FIRST and
+   confirm the field / column / status you depend on is the one actually mutated
+   on the path you rely on. Read-only access to a non-owned file for this
+   research is always fine. A filter or guard keyed on the wrong column is dead
+   code that silently gates nothing.
 
 `SendMessage` and the task-management tools are always available to a teammate
 regardless of the `tools:` frontmatter allowlist — their absence never blocks
@@ -132,6 +169,7 @@ def load_skill_classes() -> Dict[str, type]:
     from skills.testing.generate_tests import GenerateTests
     from skills.version.check_versions import CheckVersions
     from skills.security.security_scan import SecurityScan
+    from skills.quality.app_store_check import AppStoreCheck
 
     return {
         "scaffold_react": ScaffoldReact,
@@ -144,6 +182,7 @@ def load_skill_classes() -> Dict[str, type]:
         "generate_tests": GenerateTests,
         "check_versions": CheckVersions,
         "security_scan": SecurityScan,
+        "app_store_check": AppStoreCheck,
     }
 
 
