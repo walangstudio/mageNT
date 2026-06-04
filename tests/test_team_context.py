@@ -6,7 +6,13 @@ CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS env var and exempted "one-shot subagents".
 These tests pin the capability-based rewrite so it can't regress.
 """
 
-from tools.generate_dispatch import TEAM_CONTEXT_BLOCK
+from tools.generate_dispatch import (
+    PLAN_APPROVAL_RESPONSE_OBJ,
+    PROTOCOL_BANNER,
+    SHUTDOWN_RESPONSE_OBJ,
+    TEAM_CONTEXT_BLOCK,
+    render_subagent,
+)
 
 
 def test_gate_is_not_env_var_based():
@@ -37,6 +43,53 @@ def test_shutdown_handshake_still_present():
     assert "shutdown_response" in TEAM_CONTEXT_BLOCK
     assert "plan_approval_response" in TEAM_CONTEXT_BLOCK
     assert "request_id" in TEAM_CONTEXT_BLOCK
+
+
+def test_shutdown_directive_leads_block():
+    # Field regression (2026-06-04): a 0.7.5 teammate received a shutdown_request
+    # and idled instead of acking. Root cause was salience — the block opened
+    # with the teammate-detection + one-shot/JSON-only hedge, burying the action.
+    # Pin action-first ordering: the binding shutdown directive must come BEFORE
+    # the one-shot exemption hedge, so it can't regress back to hedge-first.
+    block = TEAM_CONTEXT_BLOCK
+    assert block.lstrip().startswith("## Team Context")
+    lead = block.index("STOP — READ THIS FIRST")
+    hedge = block.index("The ONLY exemption is a true one-shot")
+    assert lead < hedge, "shutdown directive must lead the hedge"
+    # The exact response object must appear in the leading directive, not only
+    # deep in rule 5.
+    assert block.index('"type":"shutdown_response"') < hedge
+
+
+def test_handshake_objects_single_source():
+    # The shutdown/plan-approval objects appear twice each in the block (the
+    # action-first leading directive AND rules 0/5) for primacy + recency. Both
+    # copies must render from the SHUTDOWN_RESPONSE_OBJ / PLAN_APPROVAL_RESPONSE_OBJ
+    # constants so a schema change can't leave one copy stale (the original
+    # /code-review drift hazard). Assert each canonical object occurs >= 2 times.
+    assert TEAM_CONTEXT_BLOCK.count(SHUTDOWN_RESPONSE_OBJ) >= 2
+    assert TEAM_CONTEXT_BLOCK.count(PLAN_APPROVAL_RESPONSE_OBJ) >= 2
+    # And they are well-formed JSON shapes (catches a malformed constant edit).
+    import json
+
+    assert json.loads(SHUTDOWN_RESPONSE_OBJ)["type"] == "shutdown_response"
+    assert json.loads(PLAN_APPROVAL_RESPONSE_OBJ)["type"] == "plan_approval_response"
+
+
+def test_render_subagent_has_primacy_banner():
+    # The role body re-anchors a "do one task then stop" identity between the
+    # default teammate prompt and the trailing block; the banner gives the
+    # protocol primacy as well as recency. Render a real agent and assert the
+    # banner leads, the role follows, and the full block still trails.
+    import server
+
+    name, cls = next(iter(server.AGENT_CLASSES.items()))
+    out = render_subagent(name, cls, {"mode": "subagent"}, teams_mode=True)
+    assert "<team_protocol_priority>" in out
+    banner_at = out.index(PROTOCOL_BANNER)
+    role_at = out.index("<role>")
+    block_at = out.index(TEAM_CONTEXT_BLOCK)
+    assert banner_at < role_at < block_at, "banner leads, role middle, block trails"
 
 
 def test_cross_scope_and_wireup_and_trace_rules_present():
