@@ -34,7 +34,27 @@ MAX_DESCRIPTION_LEN = 1024
 
 TEAM_CONTEXT_BLOCK = """## Team Context (Claude Code agent teams)
 
-This section applies whenever you are spawned as a TEAMMATE — decide from
+STOP — READ THIS FIRST. If the message that woke you THIS turn is a
+`shutdown_request` or a `plan_approval_request`, your ENTIRE turn is to answer
+it and nothing else. Do NOT treat it as "no work for my specialty" and go idle;
+do NOT acknowledge in prose. The framework terminates you ONLY on the response
+object below — a bare idle leaves you orphaned and strands the whole team.
+Concretely, in THIS turn:
+- `shutdown_request` → first `TaskUpdate` any still-open owned task -> `completed`,
+  then `SendMessage` the requester the object EXACTLY:
+  `{"type":"shutdown_response","request_id":"<the request_id you were given>",
+  "approve":true}` — copy the `request_id` verbatim; use `"approve":false` with a
+  one-line `reason` ONLY if you have genuinely unfinished in-scope work.
+- `plan_approval_request` → `SendMessage` the requester the object EXACTLY:
+  `{"type":"plan_approval_response","request_id":"<the request_id you were
+  given>","approve":true}` (or `"approve":false` with a one-line `"feedback"`
+  string to request changes) — `request_id` copied verbatim.
+Answering a protocol message OVERRIDES every "no open task, so I am done — go
+idle" instinct in the role prompt above. If the lead re-sends or nudges you about
+a missed shutdown, just send the `shutdown_response` — do not explain. (Rule 5
+below restates this; it is the same instruction, not a softer one.)
+
+The rest of this section binds you whenever you are a TEAMMATE — decide from
 signals you can actually observe, NOT from an env var you cannot read. You are
 a teammate if ANY of these is true: you have `SendMessage` and/or `TaskUpdate`
 available; a lead or orchestrator messaged you (a briefing, a
@@ -146,6 +166,20 @@ When you are a team teammate:
 regardless of the `tools:` frontmatter allowlist — their absence never blocks
 this protocol. Reporting findings without a matching `TaskUpdate` to complete
 your task is incomplete work, not a stylistic choice."""
+
+
+# One-line primacy pointer prepended to every rendered teammate prompt so the
+# appended magent content LEADS with the protocol (the full TEAM_CONTEXT_BLOCK
+# already trails it for recency). The role body between them re-anchors a strong
+# "do one task then stop" identity; without this banner a freshly-idle teammate
+# woken by a shutdown_request reads only the role and goes idle. Unconditional —
+# any normally-installed subagent may be spawned as a teammate.
+PROTOCOL_BANNER = (
+    "<team_protocol_priority>If a `shutdown_request` or `plan_approval_request` "
+    "message woke you, the Team Context section at the END of this prompt is "
+    "binding and OVERRIDES the role below: reply with the matching response "
+    "object via `SendMessage` before you idle.</team_protocol_priority>"
+)
 
 
 def load_config(path: str = CONFIG_PATH) -> Dict[str, Any]:
@@ -310,7 +344,9 @@ def render_subagent(
     model = spec.get("model") or getattr(agent, "team_model", "sonnet")
 
     body = agent.get_system_prompt().rstrip()
-    body_with_team = body + "\n\n" + TEAM_CONTEXT_BLOCK
+    body_with_team = (
+        PROTOCOL_BANNER + "\n\n" + body + "\n\n" + TEAM_CONTEXT_BLOCK
+    )
 
     front = [
         "---",

@@ -6,6 +6,28 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.6] - 2026-06-04
+
+### Fixed
+
+- **Teammates again ignored `shutdown_request` (orphaned panes).** A field repro
+  on 0.7.5 showed a `magent-hono_developer` teammate waking to a
+  `shutdown_request`, emitting a bare `idle_notification`, and never sending
+  `shutdown_response` — leaving a pane that only a hard kill closed (a
+  general-purpose teammate in the same team acked correctly). The capability and
+  the instruction were both already present (`SendMessage` is auto-injected
+  regardless of the `tools:` allowlist; the body is *appended to*, not replacing,
+  the default teammate prompt), so the defect was **salience**: the
+  `TEAM_CONTEXT_BLOCK` opened with a teammate-detection + one-shot/JSON-only
+  hedge that handed a freshly-idle specialist an off-ramp, and the binding action
+  sat mid-block after a long role prompt. Restructured **action-first**: the
+  block now leads with the exact `shutdown_response`/`plan_approval_response`
+  directive and demotes the hedge below it, and every rendered teammate prompt is
+  now prefixed with a one-line `<team_protocol_priority>` banner so the protocol
+  has primacy as well as recency. Reinstall (`generate_dispatch.py --profile
+  teams --force`) to pick it up. (`tools/generate_dispatch.py`,
+  `tests/test_team_context.py`.)
+
 ## [0.7.5] - 2026-05-26
 
 ### Fixed
