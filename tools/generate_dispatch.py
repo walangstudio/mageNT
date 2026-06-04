@@ -32,7 +32,20 @@ from tools import resolve_seniority  # noqa: E402
 CONFIG_PATH = os.path.join(REPO_ROOT, "config", "dispatch.yaml")
 MAX_DESCRIPTION_LEN = 1024
 
-TEAM_CONTEXT_BLOCK = """## Team Context (Claude Code agent teams)
+# Single source of truth for the two protocol response objects. They appear
+# twice each in the block (the action-first leading directive AND rules 0/5) for
+# primacy + recency; rendering both occurrences from these constants makes drift
+# between the copies impossible.
+SHUTDOWN_RESPONSE_OBJ = (
+    '{"type":"shutdown_response","request_id":"<the request_id you were given>",'
+    '"approve":true}'
+)
+PLAN_APPROVAL_RESPONSE_OBJ = (
+    '{"type":"plan_approval_response",'
+    '"request_id":"<the request_id you were given>","approve":true}'
+)
+
+_TEAM_CONTEXT_TEMPLATE = """## Team Context (Claude Code agent teams)
 
 STOP — READ THIS FIRST. If the message that woke you THIS turn is a
 `shutdown_request` or a `plan_approval_request`, your ENTIRE turn is to answer
@@ -42,12 +55,10 @@ object below — a bare idle leaves you orphaned and strands the whole team.
 Concretely, in THIS turn:
 - `shutdown_request` → first `TaskUpdate` any still-open owned task -> `completed`,
   then `SendMessage` the requester the object EXACTLY:
-  `{"type":"shutdown_response","request_id":"<the request_id you were given>",
-  "approve":true}` — copy the `request_id` verbatim; use `"approve":false` with a
+  `{shutdown_obj}` — copy the `request_id` verbatim; use `"approve":false` with a
   one-line `reason` ONLY if you have genuinely unfinished in-scope work.
 - `plan_approval_request` → `SendMessage` the requester the object EXACTLY:
-  `{"type":"plan_approval_response","request_id":"<the request_id you were
-  given>","approve":true}` (or `"approve":false` with a one-line `"feedback"`
+  `{plan_obj}` (or `"approve":false` with a one-line `"feedback"`
   string to request changes) — `request_id` copied verbatim.
 Answering a protocol message OVERRIDES every "no open task, so I am done — go
 idle" instinct in the role prompt above. If the lead re-sends or nudges you about
@@ -114,8 +125,7 @@ When you are a team teammate:
    (a) if your owned ledger task is still open, `TaskUpdate` -> `completed`
    first; (b) then, in the SAME turn, call `SendMessage` to the requester with
    the message object EXACTLY:
-   `{"type":"shutdown_response","request_id":"<the request_id you were given>",
-   "approve":true}` — copy the `request_id` verbatim from the shutdown_request
+   `{shutdown_obj}` — copy the `request_id` verbatim from the shutdown_request
    you received; do not invent or alter it. Use `"approve":false` with a
    one-line `reason` ONLY if you have genuinely unfinished in-scope work.
    Replying in prose, acknowledging in plain text, or simply going idle is NOT
@@ -129,8 +139,7 @@ When you are a team teammate:
    A `plan_approval_request` is the same kind of protocol message and is
    answered the same way: in the SAME turn, `SendMessage` the requester the
    object EXACTLY
-   `{"type":"plan_approval_response","request_id":"<the request_id you were
-   given>","approve":true}` (or `"approve":false` with a one-line `"feedback"`
+   `{plan_obj}` (or `"approve":false` with a one-line `"feedback"`
    string when you want changes) — request_id copied verbatim. The framework
    only acts on this object; prose, an ack, or going idle is NOT a response and
    strands the requester exactly as a missed shutdown does.
@@ -166,6 +175,12 @@ When you are a team teammate:
 regardless of the `tools:` frontmatter allowlist — their absence never blocks
 this protocol. Reporting findings without a matching `TaskUpdate` to complete
 your task is incomplete work, not a stylistic choice."""
+
+
+TEAM_CONTEXT_BLOCK = _TEAM_CONTEXT_TEMPLATE.format(
+    shutdown_obj=SHUTDOWN_RESPONSE_OBJ,
+    plan_obj=PLAN_APPROVAL_RESPONSE_OBJ,
+)
 
 
 # One-line primacy pointer prepended to every rendered teammate prompt so the

@@ -7,7 +7,9 @@ These tests pin the capability-based rewrite so it can't regress.
 """
 
 from tools.generate_dispatch import (
+    PLAN_APPROVAL_RESPONSE_OBJ,
     PROTOCOL_BANNER,
+    SHUTDOWN_RESPONSE_OBJ,
     TEAM_CONTEXT_BLOCK,
     render_subagent,
 )
@@ -57,6 +59,21 @@ def test_shutdown_directive_leads_block():
     # The exact response object must appear in the leading directive, not only
     # deep in rule 5.
     assert block.index('"type":"shutdown_response"') < hedge
+
+
+def test_handshake_objects_single_source():
+    # The shutdown/plan-approval objects appear twice each in the block (the
+    # action-first leading directive AND rules 0/5) for primacy + recency. Both
+    # copies must render from the SHUTDOWN_RESPONSE_OBJ / PLAN_APPROVAL_RESPONSE_OBJ
+    # constants so a schema change can't leave one copy stale (the original
+    # /code-review drift hazard). Assert each canonical object occurs >= 2 times.
+    assert TEAM_CONTEXT_BLOCK.count(SHUTDOWN_RESPONSE_OBJ) >= 2
+    assert TEAM_CONTEXT_BLOCK.count(PLAN_APPROVAL_RESPONSE_OBJ) >= 2
+    # And they are well-formed JSON shapes (catches a malformed constant edit).
+    import json
+
+    assert json.loads(SHUTDOWN_RESPONSE_OBJ)["type"] == "shutdown_response"
+    assert json.loads(PLAN_APPROVAL_RESPONSE_OBJ)["type"] == "plan_approval_response"
 
 
 def test_render_subagent_has_primacy_banner():
