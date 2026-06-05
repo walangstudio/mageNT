@@ -52,6 +52,11 @@ try:
 except ImportError:  # pragma: no cover
     from .spec_pipeline import _default_llm_call, _extract_and_validate  # type: ignore
 
+try:
+    from utils.constraints import check_files, extract_constraints
+except ImportError:  # pragma: no cover
+    from .constraints import check_files, extract_constraints  # type: ignore
+
 
 @dataclass
 class TaskOutcome:
@@ -155,12 +160,27 @@ _EXAMPLE_TASK_IMPL_SHAPE = '''{
 }'''
 
 
+def _constraints_for_task(task: Task, constraints) -> List[str]:
+    """The constraint lines relevant to one task: those declared on its FRs plus
+    spec-wide ones mined from success criteria."""
+    scope = set(task.fr_ids) | {"success_criteria"}
+    lines = []
+    for c in constraints:
+        if c.source and c.source not in scope:
+            continue
+        verb = "must NOT use" if c.kind == "forbid" else "MUST use"
+        why = f" ({c.message})" if c.message else ""
+        lines.append(f"  - {verb} `{c.pattern}`{why}")
+    return lines
+
+
 def _build_task_prompt(
     task: Task,
     spec: FeatureSpec,
     plan: ImplementationPlan,
     failing_test_source: str,
     framework: TestFramework,
+    constraints=(),
 ) -> str:
     """Build the user message for a single task.
 
@@ -171,13 +191,24 @@ def _build_task_prompt(
     optimization for a much smaller prompt that local models can actually
     process. Frontier models (Claude, GPT-OSS-120b) get the same prompt
     and produce equivalent code without the test-source crutch.
+
+    Declared spec constraints are rendered explicitly so the implementer (a
+    provider model, or the host under passthrough) is told the banned/required
+    tokens up front — the test alone can't communicate them.
     """
     relevant_frs = [r for r in spec.requirements if r.id in task.fr_ids]
+    constraint_lines = _constraints_for_task(task, constraints)
+    constraint_block = (
+        "\n\nHard constraints (the test does NOT check these — obey them anyway):\n"
+        + "\n".join(constraint_lines)
+        if constraint_lines else ""
+    )
     return (
         f"Task {task.id}: {task.title}\n"
         f"Files: {task.files}\n"
         f"FR(s) to satisfy:\n"
         + "\n".join(f"  - {r.id} ({r.rfc2119}): {r.statement}" for r in relevant_frs)
+        + constraint_block
         + f"\n\nLanguage: {plan.tech_stack.language}\n"
         + f"Test runner: {framework.runner_command.format(path=task.failing_test_path)}\n"
         + f"\nOutput ONE JSON object matching this shape (replace <placeholders>):\n"
@@ -413,11 +444,13 @@ class _Attempt:
     parse_err: Optional[str]
     apply_err: Optional[str]
     usage: Dict[str, Any]
+    constraint_errs: str = ""
 
 
 def _attempt_once(llm_call, agent_name, sys_prompt, user_task, schema_dict,
-                   task_id, project_dir, framework, test_rel, temperature):
-    """Generate one candidate, apply it, run the failing test + rules.
+                   task_id, project_dir, framework, test_rel, temperature,
+                   constraints=()):
+    """Generate one candidate, apply it, run the failing test + rules + constraints.
 
     Tolerates injected ``llm_call`` stubs that don't accept the schema /
     temperature kwargs (falls back progressively). Returns ``(_Attempt, raw)``.
@@ -446,14 +479,17 @@ def _attempt_once(llm_call, agent_name, sys_prompt, user_task, schema_dict,
         return _Attempt(ti, [], False, "", "", None, str(ve), usage), raw
     test_passed, test_out = _run_test_verbose(framework, project_dir, test_rel)
     rule_errs = _rules_errors(project_dir, files)
-    return _Attempt(ti, files, test_passed, test_out, rule_errs, None, None, usage), raw
+    constraint_errs = check_files(project_dir, files, constraints) if constraints else ""
+    return _Attempt(ti, files, test_passed, test_out, rule_errs, None, None,
+                    usage, constraint_errs), raw
 
 
 def _select_best(attempts: List["_Attempt"]) -> "_Attempt":
-    """Execution-based selection: prefer a fully-passing candidate, else one that
-    at least parsed and applied cleanly, else the first."""
+    """Execution-based selection: prefer a fully-clean candidate (test passes, no
+    rule or spec-constraint violations), else one that at least parsed and
+    applied cleanly, else the first."""
     for a in attempts:
-        if a.test_passed and not a.rule_errs:
+        if a.test_passed and not a.rule_errs and not a.constraint_errs:
             return a
     for a in attempts:
         if a.parse_err is None and a.apply_err is None:
@@ -511,6 +547,7 @@ def run_implementation(
     run_tasks = _ordered_tasks([t for t in tasks.tasks if t.id in wanted_ids])
 
     best_of_n, bon_temperature = _resolve_bon(best_of_n, bon_temperature)
+    constraints = extract_constraints(spec)
     schema_dict = TaskImplementation.model_json_schema()
     outcomes: List[TaskOutcome] = []
     commit_traces: List[CommitTrace] = []
@@ -535,7 +572,8 @@ def run_implementation(
             shutil.copy2(test_full, project_test)
         test_rel = str(project_test.relative_to(project_dir)).replace("\\", "/")
 
-        base_prompt = _build_task_prompt(task, spec, plan, failing_test_source, framework)
+        base_prompt = _build_task_prompt(task, spec, plan, failing_test_source,
+                                          framework, constraints)
         sys_prompt = (
             "You are a senior implementer. Output a single TaskImplementation JSON "
             "object — no prose, no code fence. Files must be COMPLETE contents, "
@@ -550,6 +588,7 @@ def run_implementation(
             # repair attempts are single-sample with accumulated feedback.
             files_written: List[str] = []
             test_passed = False
+            constraint_errs = ""
             last_error = None
             feedback = ""
             for attempt in range(repair_budget + 1):
@@ -563,14 +602,15 @@ def run_implementation(
                     a, last_raw = _attempt_once(
                         llm_call, agent_name, sys_prompt, user_task, schema_dict,
                         task.id, project_dir, framework, test_rel, temp,
+                        constraints,
                     )
                     spec_store.record_phase_cost(spec_id, "implementation_trace", {
                         "task": task.id, "agent": agent_name, "attempt": attempt,
                         "candidate": cand, **a.usage,
                     })
                     tries.append(a)
-                    if a.test_passed and not a.rule_errs:
-                        break  # first fully-passing candidate wins
+                    if a.test_passed and not a.rule_errs and not a.constraint_errs:
+                        break  # first fully-clean candidate wins
                 a = _select_best(tries)
 
                 if a.ti is None:
@@ -601,21 +641,35 @@ def run_implementation(
                     except ValueError:
                         files_written = a.files_written
                 test_passed = a.test_passed
-                if test_passed and not a.rule_errs:
+                constraint_errs = a.constraint_errs
+                if test_passed and not a.rule_errs and not constraint_errs:
                     last_error = None
                     break
 
-                last_error = "verification failed (test or rules)"
+                last_error = "verification failed (test, rules, or constraints)"
                 diag = []
                 if not test_passed:
                     diag.append(f"FAILING TEST did not pass. Key diagnostics:\n{_excerpt_failure(a.test_out)}")
                 if a.rule_errs:
                     diag.append(f"BLOCKING rule violations:\n{a.rule_errs[:1500]}")
+                if constraint_errs:
+                    diag.append(f"SPEC CONSTRAINT violations (the test won't catch these):\n{constraint_errs[:1500]}")
                 feedback = (
                     "\n\nPREVIOUS ATTEMPT FAILED verification. Fix these and return "
                     "the COMPLETE corrected files:\n" + "\n\n".join(diag)
                 )
 
+            # A surviving spec-constraint violation (e.g. used eval() when the FR
+            # forbids it) is a real failure even when the test passes — the test
+            # can't catch it. rule_errs stays advisory-at-end, as before.
+            ok = bool(test_passed and files_written and not constraint_errs)
+            if not ok and not last_error and constraint_errs:
+                last_error = f"spec constraint not satisfied:\n{constraint_errs}"
+
+            # Commit even on failure (test or constraint) so the attempt is
+            # preserved for inspection — same as the pre-existing test-fail path.
+            # The trace records `ok`, NOT the raw test result, so a constraint
+            # violation is never logged as a clean pass for a downstream gate.
             commit_sha = _commit(
                 project_dir, files_written + [test_rel], task.title, task.fr_ids,
             ) if files_written else None
@@ -624,13 +678,13 @@ def run_implementation(
                 task_id=task.id, fr_ids=task.fr_ids,
                 files_written=files_written, test_passed=test_passed,
                 commit_sha=commit_sha,
-                error=None if (test_passed and files_written) else last_error,
+                error=None if ok else last_error,
             ))
             if commit_sha:
                 for fr in task.fr_ids:
                     commit_traces.append(CommitTrace(
                         fr_id=fr, task_id=task.id, commit_sha=commit_sha,
-                        files=files_written, test_passed=test_passed,
+                        files=files_written, test_passed=ok,
                     ))
         finally:
             _clear_active_task(spec_dir)

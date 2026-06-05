@@ -21,6 +21,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   temperature on the first attempt, keep the one that passes the failing test.
   Default 1 (single sample), so behaviour is unchanged until enabled. Inert under
   passthrough.
+- **Spec-level constraint enforcement** — close the "the test isn't the whole
+  spec" gap an e2e run exposed (llama-3.1-8b passed an `eval()`-free FR by
+  writing `return eval(expr)`; the visible test only checked results).
+  `FunctionalRequirement` gains a typed `constraints` list (`forbid`/`require` a
+  code token, optional regex), and a narrow heuristic also mines FR /
+  success-criteria prose for the common "no `eval()`" / "without subprocess"
+  shape. The implement loop checks the written code against them
+  (`utils/constraints.py`): a violated `forbid` (e.g. `eval` used when the FR
+  bans it) drives the repair loop and, if it survives, fails the task outcome
+  even when the test passes — and is never recorded as a clean pass in the
+  trace. Declared constraints are also rendered into the task prompt, so the
+  host sees them under passthrough. No constraints declared -> zero behaviour
+  change. (`agents/spec_schemas.py`, `utils/implement_runner.py`,
+  `tests/test_constraints.py`.)
 
 ### Changed
 

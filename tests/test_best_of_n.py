@@ -3,11 +3,12 @@
 from utils.implement_runner import _Attempt, _resolve_bon, _select_best
 
 
-def _mk(passed=False, rule_errs="", parse_err=None, apply_err=None, tag=""):
+def _mk(passed=False, rule_errs="", parse_err=None, apply_err=None, tag="",
+        constraint_errs=""):
     return _Attempt(
         ti=tag or "ti", files_written=[tag] if tag else [], test_passed=passed,
         test_out="", rule_errs=rule_errs, parse_err=parse_err, apply_err=apply_err,
-        usage={},
+        usage={}, constraint_errs=constraint_errs,
     )
 
 
@@ -23,6 +24,13 @@ def test_passing_with_rule_errs_not_selected_over_clean_apply():
     # Neither is fully-passing; selector falls to first cleanly-applied → 'lint'
     # is also cleanly applied and comes first.
     assert _select_best([a, b]).files_written == ["lint"]
+
+
+def test_constraint_violation_not_selected_as_fully_passing():
+    a = _mk(passed=True, constraint_errs="solution.py: forbidden 'eval' is used", tag="cheat")
+    b = _mk(passed=True, tag="honest")
+    # 'cheat' passes the test but violates a spec constraint; the clean pass wins.
+    assert _select_best([a, b]).files_written == ["honest"]
 
 
 def test_prefers_applied_over_parse_failed():

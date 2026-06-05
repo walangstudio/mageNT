@@ -103,8 +103,38 @@ That pipeline was verified separately end-to-end against a live provider: a real
 `run_implementation` run (NIM Llama-70b, roman numerals) produced a passing file
 and a git commit on the first candidate; a harder run (NIM Llama-8b, expression
 evaluator) exercised the full machinery — 3 best-of-N candidates plus 2 repair
-rounds — before committing. Note the 8b run passed by using `eval()`, which the
-visible test did not forbid: a constraint absent from the test is not enforced.
+rounds — before committing. The 8b run originally passed by using `eval()`, which
+the visible test did not forbid — a constraint absent from the test was not
+enforced. That gap is now closed: a spec can declare the constraint
+(`FunctionalRequirement.constraints`, or just write "no `eval()`" in the FR), and
+the implement loop checks the written code, drives the repair loop on a
+violation, and fails the task if it survives. See
+[constraint enforcement](#spec-level-constraints).
+
+## Spec-level constraints
+
+A failing test pins *behaviour*, not forbidden *means* — "evaluate the expression"
+is satisfied by `return eval(expr)` as far as the test can tell. A spec can now
+declare hard code-level constraints that the implement loop enforces beyond the
+test:
+
+- **Explicit:** `FunctionalRequirement.constraints` — a typed list of
+  `{kind: forbid|require, pattern, message, regex}`. `forbid eval`,
+  `require "async def"`, `forbid os.system`. Durable and unambiguous; prefer this.
+- **Heuristic:** a narrow scan of FR / success-criteria prose for the common
+  "no `eval()`" / "without subprocess" shape. Conservative by design (only
+  `token()` forms and a small dangerous-builtin allowlist) so it almost never
+  invents a constraint that wasn't meant. For anything beyond the obvious, write
+  an explicit constraint.
+
+Matching is word-boundaried (`forbid eval` flags `eval(` but not `ast.literal_eval`
+or `evaluate`) and ignores banned tokens that appear only in comments. A violated
+`forbid` drives the repair loop with a "the test won't catch this" message; if it
+survives the repair budget, the task outcome is a failure (not a clean pass) even
+though the test passed, and the trace never records it as passed. Declared
+constraints are also rendered into the task prompt, so the implementer — a
+provider model, or the host under passthrough — is told the banned/required tokens
+up front. No constraints declared means zero behaviour change.
 
 ## Caveats
 
