@@ -4,11 +4,13 @@ from typing import List
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class PHPDeveloper(BaseAgent):
+class PHPDeveloper(CodeDisciplineMixin, BaseAgent):
     """PHP Backend Developer specializing in modern PHP development."""
 
     @property

@@ -82,11 +82,13 @@ def _default_llm_call(
     context: Optional[str],
     response_schema: Optional[Dict[str, Any]] = None,
     schema_name: str = "Response",
+    temperature: Optional[float] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """Wrap utils.llm_adapter.dispatch_full with schema-aware routing.
 
     Returns ``(text, usage_dict)``. ``usage_dict`` carries ``input_tokens`` /
-    ``output_tokens`` when the provider reports them.
+    ``output_tokens`` when the provider reports them. ``temperature`` overrides
+    the config-resolved value (best-of-N passes a higher value for diversity).
     """
     try:
         from utils.llm_adapter import dispatch_full  # noqa: E402
@@ -97,6 +99,7 @@ def _default_llm_call(
         context=context,
         response_schema=response_schema,
         schema_name=schema_name,
+        temperature=temperature,
     )
 
 

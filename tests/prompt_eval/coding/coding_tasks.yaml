@@ -1,11 +1,18 @@
 # Coding eval tasks — objective pass@1 via test execution (not a judge).
 # Each task: the model must produce the full contents of `solution_file`; the
-# hidden `test` (the model never sees it) decides pass/fail.
+# hidden `test` (the model never sees it directly; only its failure output is fed
+# back during the repair loop) decides pass/fail. `held_out_test` is NEVER shown
+# or fed back — it scores the FINAL code against extra edge cases, so a loop that
+# games the visible assertion is caught.
+#
+# Languages: python (agent python_backend) and javascript (agent nodejs_backend,
+# node built-in test/assert, no npm deps). Difficulty: easy | medium | hard.
 tasks:
   - id: 1
     title: fizzbuzz
     agent: python_backend
     language: python
+    difficulty: easy
     solution_file: solution.py
     test_file: test_solution.py
     runner: "python -m pytest test_solution.py -q"
@@ -24,11 +31,23 @@ tasks:
       def test_invalid():
           with pytest.raises(ValueError):
               fizzbuzz(0)
+    held_out_test: |
+      import pytest
+      from solution import fizzbuzz
+      def test_more():
+          assert fizzbuzz(30) == "FizzBuzz"
+          assert fizzbuzz(9) == "Fizz"
+          assert fizzbuzz(20) == "Buzz"
+          assert fizzbuzz(7) == "7"
+      def test_neg():
+          with pytest.raises(ValueError):
+              fizzbuzz(-3)
 
   - id: 2
     title: parse key=value query string
     agent: python_backend
     language: python
+    difficulty: easy
     solution_file: solution.py
     test_file: test_solution.py
     runner: "python -m pytest test_solution.py -q"
@@ -43,11 +62,18 @@ tasks:
           assert parse_qs("a=1&b=2") == {"a": "1", "b": "2"}
           assert parse_qs("a") == {"a": ""}
           assert parse_qs("a=1&a=2") == {"a": "2"}
+    held_out_test: |
+      from solution import parse_qs
+      def test_more():
+          assert parse_qs("x=") == {"x": ""}
+          assert parse_qs("a=1&b&c=3") == {"a": "1", "b": "", "c": "3"}
+          assert parse_qs("k=a=b") == {"k": "a=b"}
 
   - id: 3
     title: balanced brackets
     agent: python_backend
     language: python
+    difficulty: easy
     solution_file: solution.py
     test_file: test_solution.py
     runner: "python -m pytest test_solution.py -q"
@@ -62,3 +88,413 @@ tasks:
           assert is_balanced("(]") is False
           assert is_balanced("([)]") is False
           assert is_balanced("a(b)c") is True
+    held_out_test: |
+      from solution import is_balanced
+      def test_more():
+          assert is_balanced("") is True
+          assert is_balanced("(") is False
+          assert is_balanced(")(") is False
+          assert is_balanced("{[()()]}") is True
+          assert is_balanced("{[(])}") is False
+
+  - id: 4
+    title: LRU cache
+    agent: python_backend
+    language: python
+    difficulty: hard
+    solution_file: solution.py
+    test_file: test_solution.py
+    runner: "python -m pytest test_solution.py -q"
+    prompt: |
+      Implement class LRUCache in solution.py:
+      - __init__(self, capacity: int)
+      - get(self, key: int) -> int  (return -1 if key absent)
+      - put(self, key: int, value: int) -> None
+      Evict the least-recently-used entry when capacity is exceeded. Both get and
+      put count as a use.
+    test: |
+      from solution import LRUCache
+      def test_lru():
+          c = LRUCache(2)
+          c.put(1, 1); c.put(2, 2)
+          assert c.get(1) == 1
+          c.put(3, 3)
+          assert c.get(2) == -1
+          c.put(4, 4)
+          assert c.get(1) == -1
+          assert c.get(3) == 3
+          assert c.get(4) == 4
+    held_out_test: |
+      from solution import LRUCache
+      def test_update_existing():
+          c = LRUCache(2)
+          c.put(1, 1); c.put(2, 2)
+          c.put(1, 10)
+          c.put(3, 3)
+          assert c.get(2) == -1
+          assert c.get(1) == 10
+          assert c.get(3) == 3
+      def test_cap1():
+          c = LRUCache(1)
+          c.put(1, 1); c.put(2, 2)
+          assert c.get(1) == -1
+          assert c.get(2) == 2
+
+  - id: 5
+    title: roman to int
+    agent: python_backend
+    language: python
+    difficulty: medium
+    solution_file: solution.py
+    test_file: test_solution.py
+    runner: "python -m pytest test_solution.py -q"
+    prompt: |
+      Implement roman_to_int(s: str) -> int in solution.py. Standard Roman
+      numerals (I V X L C D M) with subtractive notation (IV=4, IX=9, XL=40,
+      XC=90, CD=400, CM=900). Raise ValueError for an empty string or any
+      character that is not a Roman digit.
+    test: |
+      import pytest
+      from solution import roman_to_int
+      def test_roman():
+          assert roman_to_int('III') == 3
+          assert roman_to_int('IV') == 4
+          assert roman_to_int('IX') == 9
+          assert roman_to_int('LVIII') == 58
+          assert roman_to_int('MCMXCIV') == 1994
+      def test_bad():
+          with pytest.raises(ValueError):
+              roman_to_int('')
+          with pytest.raises(ValueError):
+              roman_to_int('ABC')
+    held_out_test: |
+      import pytest
+      from solution import roman_to_int
+      def test_more():
+          assert roman_to_int('XL') == 40
+          assert roman_to_int('XC') == 90
+          assert roman_to_int('CD') == 400
+          assert roman_to_int('CM') == 900
+          assert roman_to_int('MMXXIV') == 2024
+      def test_bad_char():
+          with pytest.raises(ValueError):
+              roman_to_int('IIvI')
+
+  - id: 6
+    title: merge intervals
+    agent: python_backend
+    language: python
+    difficulty: medium
+    solution_file: solution.py
+    test_file: test_solution.py
+    runner: "python -m pytest test_solution.py -q"
+    prompt: |
+      Implement merge_intervals(intervals: list[list[int]]) -> list[list[int]] in
+      solution.py. Merge all overlapping intervals and return them sorted by
+      start. Touching intervals such as [1,2] and [2,3] merge into [1,3]. Empty
+      input returns []. Do not mutate the input.
+    test: |
+      from solution import merge_intervals
+      def test_merge():
+          assert merge_intervals([]) == []
+          assert merge_intervals([[1,3],[2,6],[8,10],[15,18]]) == [[1,6],[8,10],[15,18]]
+          assert merge_intervals([[1,4],[4,5]]) == [[1,5]]
+          assert merge_intervals([[1,4],[2,3]]) == [[1,4]]
+          assert merge_intervals([[3,5],[1,2]]) == [[1,2],[3,5]]
+    held_out_test: |
+      from solution import merge_intervals
+      def test_more():
+          assert merge_intervals([[1,4],[0,4]]) == [[0,4]]
+          assert merge_intervals([[1,4],[5,6]]) == [[1,4],[5,6]]
+          assert merge_intervals([[2,3],[4,5],[6,7],[8,9],[1,10]]) == [[1,10]]
+      def test_no_mutate():
+          src = [[3,5],[1,2]]
+          merge_intervals(src)
+          assert src == [[3,5],[1,2]]
+
+  - id: 7
+    title: RLE round-trip
+    agent: python_backend
+    language: python
+    difficulty: medium
+    solution_file: solution.py
+    test_file: test_solution.py
+    runner: "python -m pytest test_solution.py -q"
+    prompt: |
+      Implement rle_encode(s: str) -> str and rle_decode(s: str) -> str in
+      solution.py for lowercase-letter strings. Encode each run as <count><char>,
+      e.g. 'aaabbc' -> '3a2b1c'. Counts may be multi-digit. Decode reverses it.
+      rle_decode(rle_encode(s)) must equal s; the empty string round-trips to ''.
+    test: |
+      from solution import rle_encode, rle_decode
+      def test_rle():
+          assert rle_encode('aaabbc') == '3a2b1c'
+          assert rle_decode('3a2b1c') == 'aaabbc'
+          assert rle_encode('') == ''
+          assert rle_decode('') == ''
+          assert rle_decode('11a1b') == 'a'*11 + 'b'
+          for s in ['', 'a', 'abc', 'aaaa', 'aabbbbccccc', 'z'*11]:
+              assert rle_decode(rle_encode(s)) == s
+    held_out_test: |
+      from solution import rle_encode, rle_decode
+      def test_more():
+          assert rle_encode('a'*123) == '123a'
+          assert rle_decode('123a') == 'a'*123
+          for s in ['mississippi', 'a'*100 + 'b'*7, 'abcdefg']:
+              assert rle_decode(rle_encode(s)) == s
+
+  - id: 8
+    title: expression evaluator
+    agent: python_backend
+    language: python
+    difficulty: hard
+    solution_file: solution.py
+    test_file: test_solution.py
+    runner: "python -m pytest test_solution.py -q"
+    prompt: |
+      Implement eval_expr(s: str) -> float in solution.py that evaluates an
+      arithmetic expression containing + - * / and parentheses with standard
+      precedence and left-associativity. Operands are integer or decimal
+      literals. Spaces are ignored. Division is floating point. Do NOT use eval()
+      or exec(); parse it yourself.
+    test: |
+      from solution import eval_expr
+      def test_eval():
+          assert eval_expr('1+2*3') == 7
+          assert eval_expr('(1+2)*3') == 9
+          assert eval_expr('2*3+4*5') == 26
+          assert eval_expr('10/4') == 2.5
+          assert eval_expr('2*(3+(4-1))') == 12
+          assert eval_expr(' 7 + 3 * 2 ') == 13
+          assert eval_expr('100-2*3*4') == 76
+    held_out_test: |
+      from solution import eval_expr
+      def test_more():
+          assert eval_expr('1-2-3') == -4
+          assert eval_expr('2*2*2*2') == 16
+          assert eval_expr('(1+(2+(3+4)))') == 10
+          assert abs(eval_expr('1/2/2') - 0.25) < 1e-9
+          assert eval_expr('3.5*2') == 7.0
+
+  - id: 9
+    title: two sum
+    agent: python_backend
+    language: python
+    difficulty: easy
+    solution_file: solution.py
+    test_file: test_solution.py
+    runner: "python -m pytest test_solution.py -q"
+    prompt: |
+      Implement two_sum(nums: list[int], target: int) -> tuple[int, int] in
+      solution.py that returns the indices (i, j) with i < j of the two numbers
+      that add up to target. Exactly one solution exists. The same element may
+      not be used twice.
+    test: |
+      from solution import two_sum
+      def test_two_sum():
+          assert two_sum([2,7,11,15], 9) == (0, 1)
+          assert two_sum([3,2,4], 6) == (1, 2)
+          assert two_sum([3,3], 6) == (0, 1)
+    held_out_test: |
+      from solution import two_sum
+      def test_more():
+          assert two_sum([-1,-2,-3,-4,-5], -8) == (2, 4)
+          assert two_sum([0,4,3,0], 0) == (0, 3)
+          assert two_sum([1,5,5,11], 10) == (1, 2)
+
+  - id: 10
+    title: group anagrams
+    agent: python_backend
+    language: python
+    difficulty: medium
+    solution_file: solution.py
+    test_file: test_solution.py
+    runner: "python -m pytest test_solution.py -q"
+    prompt: |
+      Implement group_anagrams(words: list[str]) -> list[list[str]] in
+      solution.py. Group words that are anagrams of each other. Within each group
+      preserve input order. Order the groups by the index of their first member.
+    test: |
+      from solution import group_anagrams
+      def test_group():
+          assert group_anagrams(["eat","tea","tan","ate","nat","bat"]) == \
+              [["eat","tea","ate"],["tan","nat"],["bat"]]
+          assert group_anagrams([]) == []
+          assert group_anagrams(["a"]) == [["a"]]
+    held_out_test: |
+      from solution import group_anagrams
+      def test_more():
+          assert group_anagrams(["abc","cba","xyz"]) == [["abc","cba"],["xyz"]]
+          assert group_anagrams(["",""]) == [["",""]]
+          assert group_anagrams(["ab","ba","abc"]) == [["ab","ba"],["abc"]]
+
+  - id: 11
+    title: validate ipv4
+    agent: python_backend
+    language: python
+    difficulty: medium
+    solution_file: solution.py
+    test_file: test_solution.py
+    runner: "python -m pytest test_solution.py -q"
+    prompt: |
+      Implement is_valid_ipv4(s: str) -> bool in solution.py. True iff s is a
+      dotted-quad IPv4 address: exactly four decimal octets 0-255, no leading
+      zeros (except the single digit "0"), no extra characters or whitespace.
+    test: |
+      from solution import is_valid_ipv4
+      def test_ip():
+          assert is_valid_ipv4("0.0.0.0") is True
+          assert is_valid_ipv4("255.255.255.255") is True
+          assert is_valid_ipv4("192.168.1.1") is True
+          assert is_valid_ipv4("256.1.1.1") is False
+          assert is_valid_ipv4("1.1.1") is False
+          assert is_valid_ipv4("01.1.1.1") is False
+    held_out_test: |
+      from solution import is_valid_ipv4
+      def test_more():
+          assert is_valid_ipv4("1.1.1.1.1") is False
+          assert is_valid_ipv4("1.1.1.-1") is False
+          assert is_valid_ipv4(" 1.1.1.1") is False
+          assert is_valid_ipv4("1.1.1.1 ") is False
+          assert is_valid_ipv4("a.b.c.d") is False
+          assert is_valid_ipv4("00.0.0.0") is False
+
+  - id: 12
+    title: spiral matrix
+    agent: python_backend
+    language: python
+    difficulty: hard
+    solution_file: solution.py
+    test_file: test_solution.py
+    runner: "python -m pytest test_solution.py -q"
+    prompt: |
+      Implement spiral_order(matrix: list[list[int]]) -> list[int] in solution.py
+      that returns all elements of the m x n matrix in clockwise spiral order
+      starting from the top-left. An empty matrix returns [].
+    test: |
+      from solution import spiral_order
+      def test_spiral():
+          assert spiral_order([[1,2,3],[4,5,6],[7,8,9]]) == [1,2,3,6,9,8,7,4,5]
+          assert spiral_order([[1,2,3,4],[5,6,7,8],[9,10,11,12]]) == \
+              [1,2,3,4,8,12,11,10,9,5,6,7]
+          assert spiral_order([]) == []
+    held_out_test: |
+      from solution import spiral_order
+      def test_more():
+          assert spiral_order([[1]]) == [1]
+          assert spiral_order([[1,2,3]]) == [1,2,3]
+          assert spiral_order([[1],[2],[3]]) == [1,2,3]
+          assert spiral_order([[1,2],[3,4]]) == [1,2,4,3]
+
+  - id: 13
+    title: js deep flatten
+    agent: nodejs_backend
+    language: javascript
+    difficulty: medium
+    solution_file: solution.mjs
+    test_file: test.mjs
+    runner: "node test.mjs"
+    prompt: |
+      In solution.mjs export a function `flatten(arr)` that deeply flattens an
+      arbitrarily nested array of numbers into a single flat array, preserving
+      order. Example: flatten([1,[2,[3,[4]],5]]) -> [1,2,3,4,5]. Use:
+      `export function flatten(arr) { ... }`
+    test: |
+      import assert from 'node:assert';
+      import { flatten } from './solution.mjs';
+      assert.deepStrictEqual(flatten([1,[2,[3,[4]],5]]), [1,2,3,4,5]);
+      assert.deepStrictEqual(flatten([]), []);
+      assert.deepStrictEqual(flatten([[[[1]]]]), [1]);
+      console.log('ok');
+    held_out_test: |
+      import assert from 'node:assert';
+      import { flatten } from './solution.mjs';
+      assert.deepStrictEqual(flatten([1,2,3]), [1,2,3]);
+      assert.deepStrictEqual(flatten([[],[1],[],[2,[]]]), [1,2]);
+      assert.deepStrictEqual(flatten([0,[-1,[-2]]]), [0,-1,-2]);
+      console.log('ok');
+
+  - id: 14
+    title: js chunk array
+    agent: nodejs_backend
+    language: javascript
+    difficulty: easy
+    solution_file: solution.mjs
+    test_file: test.mjs
+    runner: "node test.mjs"
+    prompt: |
+      In solution.mjs export `chunk(arr, size)` that splits arr into consecutive
+      sub-arrays of length `size` (the last may be shorter). size >= 1. An empty
+      array yields []. Use: `export function chunk(arr, size) { ... }`
+    test: |
+      import assert from 'node:assert';
+      import { chunk } from './solution.mjs';
+      assert.deepStrictEqual(chunk([1,2,3,4,5], 2), [[1,2],[3,4],[5]]);
+      assert.deepStrictEqual(chunk([], 3), []);
+      assert.deepStrictEqual(chunk([1,2,3], 1), [[1],[2],[3]]);
+      console.log('ok');
+    held_out_test: |
+      import assert from 'node:assert';
+      import { chunk } from './solution.mjs';
+      assert.deepStrictEqual(chunk([1,2,3], 5), [[1,2,3]]);
+      assert.deepStrictEqual(chunk([1,2,3,4], 4), [[1,2,3,4]]);
+      assert.deepStrictEqual(chunk([1,2,3,4,5,6], 3), [[1,2,3],[4,5,6]]);
+      console.log('ok');
+
+  - id: 15
+    title: js parse query string
+    agent: nodejs_backend
+    language: javascript
+    difficulty: medium
+    solution_file: solution.mjs
+    test_file: test.mjs
+    runner: "node test.mjs"
+    prompt: |
+      In solution.mjs export `parseQuery(s)` returning a plain object from an
+      "a=1&b=2" string: {a:"1", b:"2"}. Empty string -> {}. A key with no '=' maps
+      to "". Later duplicate keys win. Use: `export function parseQuery(s) { ... }`
+    test: |
+      import assert from 'node:assert';
+      import { parseQuery } from './solution.mjs';
+      assert.deepStrictEqual(parseQuery(''), {});
+      assert.deepStrictEqual(parseQuery('a=1&b=2'), {a:'1', b:'2'});
+      assert.deepStrictEqual(parseQuery('a'), {a:''});
+      assert.deepStrictEqual(parseQuery('a=1&a=2'), {a:'2'});
+      console.log('ok');
+    held_out_test: |
+      import assert from 'node:assert';
+      import { parseQuery } from './solution.mjs';
+      assert.deepStrictEqual(parseQuery('x='), {x:''});
+      assert.deepStrictEqual(parseQuery('a=1&b&c=3'), {a:'1', b:'', c:'3'});
+      assert.deepStrictEqual(parseQuery('k=a=b'), {k:'a=b'});
+      console.log('ok');
+
+  - id: 16
+    title: js balanced brackets
+    agent: nodejs_backend
+    language: javascript
+    difficulty: easy
+    solution_file: solution.mjs
+    test_file: test.mjs
+    runner: "node test.mjs"
+    prompt: |
+      In solution.mjs export `isBalanced(s)` returning true iff (), [], {} are
+      correctly nested and balanced; ignore other characters. Use:
+      `export function isBalanced(s) { ... }`
+    test: |
+      import assert from 'node:assert';
+      import { isBalanced } from './solution.mjs';
+      assert.strictEqual(isBalanced('()[]{}'), true);
+      assert.strictEqual(isBalanced('([{}])'), true);
+      assert.strictEqual(isBalanced('(]'), false);
+      assert.strictEqual(isBalanced('([)]'), false);
+      assert.strictEqual(isBalanced('a(b)c'), true);
+      console.log('ok');
+    held_out_test: |
+      import assert from 'node:assert';
+      import { isBalanced } from './solution.mjs';
+      assert.strictEqual(isBalanced(''), true);
+      assert.strictEqual(isBalanced('('), false);
+      assert.strictEqual(isBalanced(')('), false);
+      assert.strictEqual(isBalanced('{[()()]}'), true);
+      console.log('ok');

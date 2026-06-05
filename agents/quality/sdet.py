@@ -4,11 +4,13 @@ from typing import List, Sequence, Tuple
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class SDET(BaseAgent):
+class SDET(CodeDisciplineMixin, BaseAgent):
     """SDET specializing in test engineering, test infrastructure, and quality toolchains."""
 
     expertise_level = "staff"

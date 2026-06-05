@@ -52,3 +52,47 @@ agent_providers: {}
 
 model_per_agent: {}
 #   system_architect: claude-opus-4-6
+
+# ---- Sampling temperature -------------------------------------------------
+# Lower temperature raises code pass@1 (less nondeterminism); design/ideation
+# agents are left warm at the provider default. Precedence:
+#   agent_temperature[agent] > code_temperature (if agent in code_agents)
+#                            > default_temperature > provider default (unset).
+default_temperature: null      # null = provider default for non-code agents
+code_temperature: 0.1          # applied to every agent in code_agents below
+agent_temperature: {}          # explicit per-agent override (wins over all)
+
+# ---- Best-of-N (execution-selected candidates in magent_implement) ---------
+# On the first attempt, sample N candidate implementations at a higher
+# temperature and keep the one that passes the failing test. 1 = off (single
+# sample, today's behaviour). Only fires when a real provider executes code;
+# inert under passthrough. Helps weak local models most.
+code_best_of_n: 1
+code_best_of_n_temperature: 0.4
+code_agents:   # matches the agents carrying CodeDisciplineMixin
+  - android_developer
+  - api_developer
+  - automation_qa
+  - cli_installer_developer
+  - dotnet_backend
+  - flutter_developer
+  - fullstack_developer
+  - go_backend
+  - hono_developer
+  - integration_specialist
+  - ios_developer
+  - java_backend
+  - mobile_developer
+  - nextjs_developer
+  - nodejs_backend
+  - php_developer
+  - python_backend
+  - qa_engineer
+  - react_developer
+  - react_native_developer
+  - refactoring_specialist
+  - rust_backend
+  - sdet
+  - svelte_developer
+  - tui_developer
+  - vue_developer

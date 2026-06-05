@@ -299,6 +299,39 @@ def _run_test(framework: TestFramework, workspace: Path, test_path: str) -> bool
     return _run_test_verbose(framework, workspace, test_path)[0]
 
 
+_FAIL_MARKERS = (
+    "Error", "Exception", "assert", "AssertionError", "FAILED", "Traceback",
+    "E   ", "expected", "actual", "!=", "Expected", "Received",
+)
+
+
+def _excerpt_failure(output: str, limit: int = 2000) -> str:
+    """Pull the signal out of a test runner's output for repair feedback.
+
+    A raw 2500-char truncation often clips the assertion and keeps pytest's
+    collection banner. This keeps the lines that carry the diagnosis (assertion
+    / exception / expected-vs-actual) plus the tail, which is what the model
+    needs to fix the code.
+    """
+    if not output:
+        return "(no test output)"
+    lines = output.splitlines()
+    keep, seen = [], set()
+    for ln in lines:
+        s = ln.strip()
+        if s and s not in seen and any(m in ln for m in _FAIL_MARKERS):
+            keep.append(ln.rstrip())
+            seen.add(s)
+    parts = []
+    if keep:
+        parts.append("Key lines:\n" + "\n".join(keep[:25]))
+    tail = [ln.rstrip() for ln in lines[-12:] if ln.strip()]
+    if tail:
+        parts.append("Tail:\n" + "\n".join(tail))
+    text = "\n\n".join(parts) or output
+    return text[:limit]
+
+
 def _rules_errors(project_dir: Path, files_written: List[str]) -> str:
     """ERROR-level rule violations on the written files (release profile).
 
@@ -369,6 +402,81 @@ def _ordered_tasks(run_tasks: List[Task]) -> List[Task]:
     return ordered
 
 
+@dataclass
+class _Attempt:
+    """Outcome of one generate -> apply -> verify cycle (a best-of-N candidate)."""
+    ti: Optional[Any]
+    files_written: List[str]
+    test_passed: bool
+    test_out: str
+    rule_errs: str
+    parse_err: Optional[str]
+    apply_err: Optional[str]
+    usage: Dict[str, Any]
+
+
+def _attempt_once(llm_call, agent_name, sys_prompt, user_task, schema_dict,
+                   task_id, project_dir, framework, test_rel, temperature):
+    """Generate one candidate, apply it, run the failing test + rules.
+
+    Tolerates injected ``llm_call`` stubs that don't accept the schema /
+    temperature kwargs (falls back progressively). Returns ``(_Attempt, raw)``.
+    """
+    try:
+        raw, usage = llm_call(agent_name, sys_prompt, user_task, None,
+                               response_schema=schema_dict,
+                               schema_name="TaskImplementation",
+                               temperature=temperature)
+    except TypeError:
+        try:
+            raw, usage = llm_call(agent_name, sys_prompt, user_task, None,
+                                   response_schema=schema_dict,
+                                   schema_name="TaskImplementation")
+        except TypeError:
+            raw, usage = llm_call(agent_name, sys_prompt, user_task, None)
+
+    ti, err = _coerce_task_implementation(raw, task_id)
+    if ti is None:
+        return _Attempt(None, [], False, "", "", err or "invalid", None, usage), raw
+    if ti.task_id != task_id:
+        ti = ti.model_copy(update={"task_id": task_id})
+    try:
+        files = _apply_files(project_dir, ti.files)
+    except ValueError as ve:
+        return _Attempt(ti, [], False, "", "", None, str(ve), usage), raw
+    test_passed, test_out = _run_test_verbose(framework, project_dir, test_rel)
+    rule_errs = _rules_errors(project_dir, files)
+    return _Attempt(ti, files, test_passed, test_out, rule_errs, None, None, usage), raw
+
+
+def _select_best(attempts: List["_Attempt"]) -> "_Attempt":
+    """Execution-based selection: prefer a fully-passing candidate, else one that
+    at least parsed and applied cleanly, else the first."""
+    for a in attempts:
+        if a.test_passed and not a.rule_errs:
+            return a
+    for a in attempts:
+        if a.parse_err is None and a.apply_err is None:
+            return a
+    return attempts[0]
+
+
+def _resolve_bon(best_of_n, bon_temperature):
+    """Defaults from providers config when not explicitly passed."""
+    if best_of_n is not None and bon_temperature is not None:
+        return max(1, best_of_n), bon_temperature
+    try:
+        from utils.llm_adapter import _load_providers_config
+    except ImportError:  # pragma: no cover
+        from .llm_adapter import _load_providers_config  # type: ignore
+    cfg = _load_providers_config()
+    if best_of_n is None:
+        best_of_n = cfg.get("code_best_of_n", 1)
+    if bon_temperature is None:
+        bon_temperature = cfg.get("code_best_of_n_temperature", 0.4)
+    return max(1, best_of_n), bon_temperature
+
+
 def run_implementation(
     spec_store: SpecStore,
     spec_id: str,
@@ -376,7 +484,9 @@ def run_implementation(
     agent_name: str = "fullstack_developer",
     task_ids: Optional[List[str]] = None,
     llm_call: Callable = _default_llm_call,
-    repair_budget: int = 2,
+    repair_budget: int = 3,
+    best_of_n: Optional[int] = None,
+    bon_temperature: Optional[float] = None,
 ) -> ImplementRunResult:
     """Drive the full per-task implementation loop.
 
@@ -400,6 +510,7 @@ def run_implementation(
     wanted_ids = set(task_ids) if task_ids else {t.id for t in tasks.tasks}
     run_tasks = _ordered_tasks([t for t in tasks.tasks if t.id in wanted_ids])
 
+    best_of_n, bon_temperature = _resolve_bon(best_of_n, bon_temperature)
     schema_dict = TaskImplementation.model_json_schema()
     outcomes: List[TaskOutcome] = []
     commit_traces: List[CommitTrace] = []
@@ -435,61 +546,71 @@ def run_implementation(
         _write_active_task(spec_dir, task.id)
         try:
             # generate -> apply -> verify -> repair, up to repair_budget retries.
+            # Attempt 0 draws best_of_n diverse candidates and execution-selects;
+            # repair attempts are single-sample with accumulated feedback.
             files_written: List[str] = []
             test_passed = False
             last_error = None
             feedback = ""
             for attempt in range(repair_budget + 1):
                 user_task = base_prompt + feedback
-                try:
-                    raw, usage = llm_call(
-                        agent_name, sys_prompt, user_task, None,
-                        response_schema=schema_dict, schema_name="TaskImplementation",
-                    )
-                except TypeError:
-                    raw, usage = llm_call(agent_name, sys_prompt, user_task, None)
-                spec_store.record_phase_cost(spec_id, "implementation_trace", {
-                    "task": task.id, "agent": agent_name, "attempt": attempt, **usage,
-                })
+                n = best_of_n if (attempt == 0 and best_of_n > 1) else 1
+                temp = bon_temperature if n > 1 else None
 
-                ti, err = _coerce_task_implementation(raw, task.id)
-                if ti is None:
+                tries: List[_Attempt] = []
+                last_raw = ""
+                for cand in range(n):
+                    a, last_raw = _attempt_once(
+                        llm_call, agent_name, sys_prompt, user_task, schema_dict,
+                        task.id, project_dir, framework, test_rel, temp,
+                    )
+                    spec_store.record_phase_cost(spec_id, "implementation_trace", {
+                        "task": task.id, "agent": agent_name, "attempt": attempt,
+                        "candidate": cand, **a.usage,
+                    })
+                    tries.append(a)
+                    if a.test_passed and not a.rule_errs:
+                        break  # first fully-passing candidate wins
+                a = _select_best(tries)
+
+                if a.ti is None:
                     debug_path = spec_dir / f".debug_{task.id}_raw.txt"
                     try:
-                        debug_path.write_text(raw, encoding="utf-8")
+                        debug_path.write_text(last_raw, encoding="utf-8")
                     except OSError:
                         pass
-                    last_error = f"agent output invalid: {err}; raw saved to {debug_path.name}"
+                    last_error = f"agent output invalid: {a.parse_err}; raw saved to {debug_path.name}"
                     feedback = (
                         f"\n\nPREVIOUS ATTEMPT was not valid TaskImplementation JSON: "
-                        f"{err}\nReturn ONLY a valid TaskImplementation JSON object."
+                        f"{a.parse_err}\nReturn ONLY a valid TaskImplementation JSON object."
                     )
                     continue
-                if ti.task_id != task.id:
-                    ti = ti.model_copy(update={"task_id": task.id})
-
-                try:
-                    files_written = _apply_files(project_dir, ti.files)
-                except ValueError as ve:
-                    last_error = str(ve)
-                    feedback = f"\n\nPREVIOUS ATTEMPT could not be applied: {ve}\nFix the file paths/contents."
+                if a.apply_err:
+                    last_error = a.apply_err
+                    feedback = f"\n\nPREVIOUS ATTEMPT could not be applied: {a.apply_err}\nFix the file paths/contents."
                     continue
 
-                # Verify: the failing test must pass AND no ERROR-level rule
-                # violations in the written code. Lint/typecheck diagnostics are
-                # included as repair hints when the tools are installed.
-                test_passed, test_out = _run_test_verbose(framework, project_dir, test_rel)
-                rule_errs = _rules_errors(project_dir, files_written)
-                if test_passed and not rule_errs:
+                files_written = a.files_written
+                # If best-of-N picked a candidate that ISN'T the last one tried,
+                # a later candidate overwrote its files on disk; re-apply the
+                # winner so disk == selection before commit. (When the winner is
+                # the last candidate, disk already matches.)
+                if n > 1 and a is not tries[-1]:
+                    try:
+                        files_written = _apply_files(project_dir, a.ti.files)
+                    except ValueError:
+                        files_written = a.files_written
+                test_passed = a.test_passed
+                if test_passed and not a.rule_errs:
                     last_error = None
                     break
 
                 last_error = "verification failed (test or rules)"
                 diag = []
                 if not test_passed:
-                    diag.append(f"FAILING TEST did not pass. Output:\n{test_out[:2500]}")
-                if rule_errs:
-                    diag.append(f"BLOCKING rule violations:\n{rule_errs[:1500]}")
+                    diag.append(f"FAILING TEST did not pass. Key diagnostics:\n{_excerpt_failure(a.test_out)}")
+                if a.rule_errs:
+                    diag.append(f"BLOCKING rule violations:\n{a.rule_errs[:1500]}")
                 feedback = (
                     "\n\nPREVIOUS ATTEMPT FAILED verification. Fix these and return "
                     "the COMPLETE corrected files:\n" + "\n\n".join(diag)

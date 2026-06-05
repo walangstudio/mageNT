@@ -4,11 +4,13 @@ from typing import List
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class GoBackend(BaseAgent):
+class GoBackend(CodeDisciplineMixin, BaseAgent):
     """Go Backend Developer specializing in high-performance Go services."""
 
     @property

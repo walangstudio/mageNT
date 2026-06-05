@@ -4,11 +4,13 @@ from typing import List, Sequence, Tuple
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class RefactoringSpecialist(BaseAgent):
+class RefactoringSpecialist(CodeDisciplineMixin, BaseAgent):
     """Improves code structure without changing observable behaviour.
 
     The implementer counterpart to code_reviewer: where the reviewer flags
