@@ -80,6 +80,32 @@ The raw 100→97 is one nondeterministic cell, not a real move.
    nondeterministic; `code_temperature: 0.1` is a free pass@1 lever for the
    provider path.
 
+## Cross-model: the Claude family saturates
+
+Tested with real Haiku 4.5 and Opus (via host model overrides, the passthrough
+mechanism) on 7 tasks up to competition-hard (regex `.`/`*` matcher, calculator
+with unary minus, edit distance, longest-valid-parentheses), scored visible +
+held-out:
+
+| | Haiku-raw | Haiku + magent | Opus-raw |
+|---|---|---|---|
+| all 7 tasks | pass | pass | pass |
+
+Haiku already equals Opus-raw, so magent has nothing to recover. The scaffolding
+helps where the base model *fails* — that regime exists for Llama-8b-class models,
+not for current Claude models on single-function coding. Don't expect a coding
+pass-rate gain from magent on the Claude family; its value there is structural.
+
+## Production end-to-end
+
+The benchmark scores generation quality, not the `magent_implement` MCP pipeline.
+That pipeline was verified separately end-to-end against a live provider: a real
+`run_implementation` run (NIM Llama-70b, roman numerals) produced a passing file
+and a git commit on the first candidate; a harder run (NIM Llama-8b, expression
+evaluator) exercised the full machinery — 3 best-of-N candidates plus 2 repair
+rounds — before committing. Note the 8b run passed by using `eval()`, which the
+visible test did not forbid: a constraint absent from the test is not enforced.
+
 ## Caveats
 
 - NIM is nondeterministic even at temperature 0; always ≥3 trials, report

@@ -18,6 +18,12 @@ Ever wish Claude had deep expertise in specific areas? That's what mageNT does. 
 
 Think of it like having 45 specialists on standby — Principals, Staff, and Senior engineers picked per role, plus a team-lead coordinator — each with their own specialty. You can also run a full spec-driven development cycle — from requirements to parallel implementation to delivery audit — with a single tool call per step, or spawn a parallel team of teammates in Claude Code (v2.1.32+).
 
+## What's new in 0.8
+
+Coding-quality work, with a committed benchmark to prove it ([`docs/raw-vs-magent-coding.md`](docs/raw-vs-magent-coding.md)): anti-over-engineering guardrails on all code agents, a configurable low code-gen temperature, a deeper structured-feedback repair loop, and opt-in best-of-N execution selection in `magent_implement`.
+
+**Read this before you expect a speed-up.** These levers move the needle only on *genuinely weak* models (Llama-3.1-8b-class run locally via Ollama / LM Studio / NIM), where the raw model actually fails. They do **not** help — and are mostly **inert** — when you run magent in **passthrough** mode (the default: the host Claude completes the prompt) or against a strong model. Measured: on weak Llama-8b, the guardrails recover a real persona regression (68% → 79% pass@1); on Llama-70b and the Claude family (tested down to Haiku 4.5) raw already passes, so the loop/best-of-N have nothing to recover. Temperature, the repair loop, and best-of-N fire **only** when magent drives a real API provider, never under passthrough. If your path is passthrough + Claude, magent's value is the **structure** (spec → plan → tasks → traceability, multi-agent gates), not raw code pass-rate.
+
 ## What's new in 0.7
 
 Claude Code agent-teams support (experimental). A new `--profile teams` install emits every agent — including a coordinating `magent-team_lead` — as a subagent under `~/.claude/agents/`, so any of them is spawnable as a parallel teammate via Claude Code's [agent-teams feature](https://code.claude.com/docs/en/agent-teams). Four shipped presets (audit / spec / release / stack-build) in [`examples/teams/`](examples/teams/). Two lifecycle hooks in [`hooks/teams/`](hooks/teams/) wire `magent validate` into `TaskCompleted` and append teammate-idle status to `specs/active/team_log.md`. New `magent doctor` CLI reports install count, env flag, Claude Code version, and per-preset roster completeness.
