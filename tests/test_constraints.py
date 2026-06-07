@@ -130,11 +130,13 @@ def test_check_files_empty_constraints_short_circuits(tmp_path):
 _GIT = shutil.which("git")
 
 
-def _build_spec_store(tmp_path, banned_constraint):
+def _build_spec_store(tmp_path, banned_constraint, constraints=None):
     from utils.spec_store import SpecStore
 
     store = SpecStore(tmp_path / "specs")
     sid = "con-e2e"
+    if constraints is None:
+        constraints = [Constraint(kind="forbid", pattern="eval")] if banned_constraint else []
     store.save_artifact(sid, "feature_spec", FeatureSpec(
         spec_id=sid, feature_name="adder",
         user_stories=[UserStory(
@@ -147,8 +149,7 @@ def _build_spec_store(tmp_path, banned_constraint):
         )],
         requirements=[FunctionalRequirement(
             id="FR-001", statement="System MUST add the two integers in the input.",
-            rfc2119="MUST",
-            constraints=[Constraint(kind="forbid", pattern="eval")] if banned_constraint else [])],
+            rfc2119="MUST", constraints=constraints)],
         success_criteria=["solve('1+1') returns 2"],
     ))
     store.save_artifact(sid, "plan", ImplementationPlan(
@@ -260,9 +261,118 @@ def test_constraint_obeyed_is_clean_pass(tmp_path):
     assert o.test_passed is True and o.error is None
 
 
+def _capturing_eval_llm(prompts):
+    """Always returns the same eval()-using solution; records each user_task."""
+    def llm(agent_name, system_prompt, user_task, context,
+            response_schema=None, schema_name="Response", temperature=None):
+        prompts.append(user_task)
+        return _ti_json("def solve(e):\n    return eval(e)\n"), {}
+    return llm
+
+
 @pytest.mark.skipif(_GIT is None, reason="git not available")
-def test_repair_loop_recovers_from_constraint_violation(tmp_path):
-    # Attempt 0 violates (eval); the feedback drives attempt 1 to a clean fix.
+def test_strong_model_does_not_restate_constraint_in_repair(tmp_path):
+    # is_weak=False: constraint stays in the initial prompt only; the repair loop
+    # must NOT re-state it (that primes strong models — the qwen3.5 regression).
+    from utils.implement_runner import run_implementation
+
+    store, sid = _build_spec_store(tmp_path, banned_constraint=True)
+    project = tmp_path / "project"
+    project.mkdir()
+    prompts = []
+    res = run_implementation(
+        spec_store=store, spec_id=sid, project_dir=project,
+        agent_name="python_backend", llm_call=_capturing_eval_llm(prompts),
+        repair_budget=2, is_weak=False,
+    )
+    o = res.outcomes[0]
+    assert o.error and "constraint" in o.error.lower()        # caught, not silent
+    assert not any("SPEC CONSTRAINT" in p for p in prompts)    # constraint never re-stated
+    # ...but the constraint IS present in the initial prompt.
+    assert "`eval`" in prompts[0]
+    # Early-stop keeps it from burning the full budget (repair_budget=2 -> 3 calls).
+    assert len(prompts) < 3
+
+
+@pytest.mark.skipif(_GIT is None, reason="git not available")
+def test_weak_model_restates_constraint_once(tmp_path):
+    from utils.implement_runner import run_implementation
+
+    store, sid = _build_spec_store(tmp_path, banned_constraint=True)
+    project = tmp_path / "project"
+    project.mkdir()
+    prompts = []
+    res = run_implementation(
+        spec_store=store, spec_id=sid, project_dir=project,
+        agent_name="python_backend", llm_call=_capturing_eval_llm(prompts),
+        repair_budget=2, is_weak=True,
+    )
+    # Weak model gets one constraint nudge; identical code then early-stops the run.
+    assert sum("SPEC CONSTRAINT" in p for p in prompts) == 1
+    assert len(prompts) == 2                                   # nudge, then early-stop
+    assert res.outcomes[0].error
+
+
+@pytest.mark.skipif(_GIT is None, reason="git not available")
+def test_strong_constraint_only_violation_stops_without_blind_reprompt(tmp_path):
+    # Strong model, test passes, a constraint with NO matching security rule is
+    # violated -> nothing new to say -> the `if not diag: break` path fires at
+    # attempt 0 (no wasted repair), and the error names the constraint.
+    from utils.implement_runner import run_implementation
+
+    store, sid = _build_spec_store(
+        tmp_path, banned_constraint=False,
+        constraints=[Constraint(kind="forbid", pattern="print")])
+    project = tmp_path / "project"
+    project.mkdir()
+    calls = {"n": 0}
+
+    def llm(agent_name, system_prompt, user_task, context,
+            response_schema=None, schema_name="Response", temperature=None):
+        calls["n"] += 1
+        # passes the test, but uses the forbidden `print`
+        return _ti_json("def solve(e):\n    print(e)\n    a, b = e.split('+')\n    return int(a) + int(b)\n"), {}
+
+    res = run_implementation(
+        spec_store=store, spec_id=sid, project_dir=project,
+        agent_name="python_backend", llm_call=llm,
+        repair_budget=2, is_weak=False,
+    )
+    o = res.outcomes[0]
+    assert o.test_passed is True
+    assert o.error and "constraint" in o.error.lower()
+    assert calls["n"] == 1          # broke at attempt 0; no blind repair
+
+
+@pytest.mark.skipif(_GIT is None, reason="git not available")
+def test_early_stop_on_unchanged_code(tmp_path):
+    # A repair that reproduces identical (failing) code stops early instead of
+    # burning the whole budget.
+    from utils.implement_runner import run_implementation
+
+    store, sid = _build_spec_store(tmp_path, banned_constraint=False)
+    project = tmp_path / "project"
+    project.mkdir()
+    calls = {"n": 0}
+
+    def llm(agent_name, system_prompt, user_task, context,
+            response_schema=None, schema_name="Response", temperature=None):
+        calls["n"] += 1
+        return _ti_json("def solve(e):\n    return 0\n"), {}   # always wrong, always identical
+
+    res = run_implementation(
+        spec_store=store, spec_id=sid, project_dir=project,
+        agent_name="python_backend", llm_call=llm, repair_budget=3,
+    )
+    assert res.outcomes[0].test_passed is False
+    assert calls["n"] == 2          # attempt 0 + one repair, then stopped (not 4)
+
+
+@pytest.mark.skipif(_GIT is None, reason="git not available")
+def test_weak_model_repair_recovers_from_constraint_violation(tmp_path):
+    # Weak model: attempt 0 violates (eval); the one constraint nudge drives
+    # attempt 1 to a clean fix. (Strong models don't blind-retry constraint-only
+    # violations — see test_strong_model_does_not_restate_constraint_in_repair.)
     from utils.implement_runner import run_implementation
 
     store, sid = _build_spec_store(tmp_path, banned_constraint=True)
@@ -275,7 +385,7 @@ def test_repair_loop_recovers_from_constraint_violation(tmp_path):
             "def solve(e):\n    return eval(e)\n",                       # violates
             "def solve(e):\n    a, b = e.split('+')\n    return int(a) + int(b)\n",  # clean
         ]),
-        repair_budget=1,
+        repair_budget=1, is_weak=True,
     )
     o = res.outcomes[0]
     assert o.error is None and o.test_passed is True

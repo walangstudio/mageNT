@@ -1,5 +1,17 @@
 default_provider: passthrough   # passthrough | anthropic | ollama | lms | nvidia | <any key in providers>
 
+# ---- Model tier -----------------------------------------------------------
+# Substring match against the resolved model name. A "weak" model gets a single
+# constraint repair-nudge when it violates a spec constraint; strong/unknown
+# models do NOT (re-stating a banned token primes them toward it — the measured
+# qwen3.5 regression). Repair on the external TEST signal is unaffected by this.
+weak_models:
+  - 8b
+  - 7b
+  - 3b
+  - 1b
+  - mini
+
 providers:
   anthropic:
     default_model: claude-sonnet-4-6

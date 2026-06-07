@@ -113,6 +113,23 @@ def _get_model(cfg, provider, agent_name):
     )
 
 
+def resolve_model_info(agent_name: str) -> Dict[str, Any]:
+    """Resolve the provider, model, and weak/strong tier for an agent.
+
+    `is_weak` is True only when the resolved model name matches a substring in
+    the `weak_models` config list (e.g. "8b", "7b", "3b"). Unknown models
+    default to NOT weak — the conservative choice, since the constraint
+    repair-nudge that keys off this can prime a strong model (the documented
+    qwen3.5 regression). Repair on the external test signal is unaffected.
+    """
+    cfg = _load_providers_config()
+    provider = cfg.get('agent_providers', {}).get(agent_name) or cfg.get('default_provider', 'passthrough')
+    model = _get_model(cfg, provider, agent_name)
+    weak = cfg.get('weak_models') or []
+    is_weak = bool(model and any(str(w).lower() in model.lower() for w in weak))
+    return {"provider": provider, "model": model, "is_weak": is_weak}
+
+
 def _get_temperature(cfg, agent_name):
     """Resolve sampling temperature for an agent (None = provider default).
 
@@ -139,6 +156,10 @@ def _get_api_key(provider, provider_cfg):
 
 
 def _dispatch_passthrough(system_prompt, task, context):
+    # ORDERING INVARIANT (do not reorder): the static system prompt comes FIRST,
+    # volatile content (context, task) LAST. The host completing this blob caches
+    # on its stable prefix; putting the persona first lets that cache survive
+    # across the many per-task calls in one run. A test pins this.
     body = f"{context}\n\n---\n\nTask: {task}" if context else task
     return f"{system_prompt}\n\n---\n\n{body}"
 
@@ -152,7 +173,14 @@ def _dispatch_anthropic(model, system_prompt, task, context, cfg,
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
-        kwargs = dict(model=model, max_tokens=8096, system=system_prompt,
+        # Mark the static system prompt as a cache breakpoint: a multi-task run
+        # re-sends the same persona every call, so caching it cuts input cost
+        # ~90% / latency ~85% on the prefix. Below the model's cache minimum the
+        # API silently ignores cache_control (no-op, never an error). Default 5m
+        # ephemeral tier — the only TTL settable without a beta header.
+        system_blocks = [{"type": "text", "text": system_prompt,
+                           "cache_control": {"type": "ephemeral"}}]
+        kwargs = dict(model=model, max_tokens=8096, system=system_blocks,
                        messages=[{"role": "user", "content": content}])
         if temperature is not None:
             kwargs["temperature"] = temperature
@@ -172,7 +200,9 @@ def _dispatch_anthropic(model, system_prompt, task, context, cfg,
         if hasattr(resp, "usage"):
             u = resp.usage
             usage = {"input_tokens": getattr(u, "input_tokens", 0),
-                      "output_tokens": getattr(u, "output_tokens", 0)}
+                      "output_tokens": getattr(u, "output_tokens", 0),
+                      "cache_creation_input_tokens": getattr(u, "cache_creation_input_tokens", 0) or 0,
+                      "cache_read_input_tokens": getattr(u, "cache_read_input_tokens", 0) or 0}
         # Extract text — either from a tool_use block (schema mode) or text block.
         for block in resp.content:
             if getattr(block, "type", "") == "tool_use" and getattr(block, "input", None):

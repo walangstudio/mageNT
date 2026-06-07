@@ -38,6 +38,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Adaptive, model-aware repair loop** (`utils/implement_runner.py`). A live A/B
+  showed re-stating a spec constraint each repair round *primes* a strong model
+  toward the banned token (qwen3.5 `eval` 0→4/5; the
+  [LLMs-cannot-self-correct](https://arxiv.org/abs/2310.01798) effect). Now the
+  constraint lives in the initial prompt only; the repair loop re-states it once
+  and only for weak models (`weak_models` in `config/providers.yaml`), the gate
+  still enforces it on every tier (silent violations stay 0). Plus identical-code
+  early-stop and no-blind-re-prompt to cut wasted provider calls
+  ([BEACON](https://arxiv.org/html/2510.15945)). Measured: weak-model (llama-8b)
+  silent violations 4/6→0/6; strong-model repair-amplification removed
+  (final `eval` 4/5→2/5).
+- **Prompt-cache breakpoints on the Anthropic provider** (`utils/llm_adapter.py`):
+  the static system prompt is sent with `cache_control`, and usage now reports
+  cache create/read tokens — ~90% input cost / ~85% latency off the prefix on a
+  multi-task run. Dispatchers keep static-prefix/volatile-suffix ordering (pinned
+  by a passthrough-ordering test).
 - **Anti-over-engineering guardrails on all 26 code agents** (`CodeDisciplineMixin`):
   no top-level demo/`print()` statements, no standard-library-name shadowing
   (the `parse_qs` RecursionError class of bug), no needless class/Enum

@@ -136,6 +136,67 @@ constraints are also rendered into the task prompt, so the implementer — a
 provider model, or the host under passthrough — is told the banned/required tokens
 up front. No constraints declared means zero behaviour change.
 
+## Constraint enforcement is tier-aware (measured)
+
+A live A/B (NVIDIA NIM, `forbid eval` on an arithmetic-evaluator task, scored on
+whether the final code uses `eval`) shows constraint enforcement helps weak
+models and must be applied carefully to strong ones.
+
+**Weak model (llama-3.1-8b), N=6 — the feature's value:**
+
+| | no constraint | with constraint |
+|---|---|---|
+| attempt-0 used eval | 5/6 | **0/6** |
+| **silent violation** (test green, eval used, no error) | **4/6** | **0/6** |
+
+Telling an 8b "no `eval`" works — it stops reaching for `eval` first-try (5/6→0/6),
+and the gate catches the rest, so silent violations go to zero.
+
+**Strong model (qwen3.5-122b), N=5 — saturated, and primed by the instruction:**
+
+| | no constraint | constraint (naive repair) | constraint (adaptive) |
+|---|---|---|---|
+| final used eval | 0/5 | 4/5 | **2/5** |
+| clean pass | 5/5 | 1/5 | 2/5 |
+| silent violation | 0/5 | 0/5 | 0/5 |
+
+qwen never games `eval` unprompted (0/5). Naively, the repair loop *re-stated*
+"no `eval`" every round and drove `eval` **up to 4/5** — the
+[LLMs-cannot-self-correct](https://arxiv.org/abs/2310.01798) effect: re-stating
+the instruction primes the banned token. The **adaptive** loop (constraint kept
+in the initial prompt, never repeated in repair; identical-code early-stop)
+removes that amplification (final `eval` ≈ attempt-0). A residual ~2/5 comes from
+the *initial-prompt* injection itself priming a saturated model — which is why the
+repair nudge is **weak-model-only** and the initial injection is a candidate to
+gate by tier too.
+
+The rule, then: enforce on every tier (the gate keeps silent violations at 0
+everywhere), but **guide** (prompt injection + repair nudge) only weak models —
+strong models don't need it and the instruction backfires. Configure tier via
+`weak_models` in `config/providers.yaml`.
+
+## Repair-loop economy
+
+Two changes cut wasted provider calls without losing pass-rate:
+
+- **Identical-code early-stop** — a repair round that reproduces the previous
+  attempt's code carries no new signal, so the loop stops instead of burning the
+  rest of the budget ([BEACON](https://arxiv.org/html/2510.15945): adaptive
+  stopping matches fixed budgets at 15-35% fewer generations).
+- **No blind re-prompt** — when there is nothing new to tell the model (e.g. a
+  strong model whose test passed but a constraint survived), the loop stops and
+  the gate fails it honestly rather than re-prompting (which only primes).
+
+## Prompt caching (anthropic provider)
+
+The system prompt (persona + anti-patterns + schema) is static across the many
+per-task calls in a run, so `_dispatch_anthropic` now marks it as a
+`cache_control` breakpoint — [up to ~90% input cost / ~85% latency](https://www.anthropic.com/news/prompt-caching)
+off the prefix, no-op below the model's cache minimum. The dispatchers keep the
+static prompt as a stable prefix and volatile content (task, constraints) as the
+suffix; a test pins the passthrough ordering so the host can cache the persona
+too.
+
 ## Caveats
 
 - NIM is nondeterministic even at temperature 0; always ≥3 trials, report

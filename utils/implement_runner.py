@@ -513,6 +513,28 @@ def _resolve_bon(best_of_n, bon_temperature):
     return max(1, best_of_n), bon_temperature
 
 
+def _code_sig(files) -> str:
+    """Order-independent signature of an attempt's produced files, used to
+    detect a repair round that changed nothing (stop early — no new signal)."""
+    return "\n".join(sorted(f"{f.path}\0{f.content}" for f in files))
+
+
+def _resolve_is_weak(is_weak, agent_name):
+    """Caller override wins; otherwise resolve the model tier from config.
+    Strong/unknown -> not weak (the constraint repair-nudge is skipped so it
+    can't prime the model, per the qwen3.5 regression)."""
+    if is_weak is not None:
+        return bool(is_weak)
+    try:
+        from utils.llm_adapter import resolve_model_info
+    except ImportError:  # pragma: no cover
+        from .llm_adapter import resolve_model_info  # type: ignore
+    try:
+        return bool(resolve_model_info(agent_name).get("is_weak"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def run_implementation(
     spec_store: SpecStore,
     spec_id: str,
@@ -523,11 +545,18 @@ def run_implementation(
     repair_budget: int = 3,
     best_of_n: Optional[int] = None,
     bon_temperature: Optional[float] = None,
+    is_weak: Optional[bool] = None,
 ) -> ImplementRunResult:
     """Drive the full per-task implementation loop.
 
     ``project_dir`` is where files land + commits happen. If it is not yet a
     git repo, this initialises one.
+
+    ``is_weak`` controls whether a constraint violation is re-stated in the
+    repair feedback. The constraint is ALWAYS in the initial prompt; re-stating
+    it each repair round primes strong models toward the banned token (the
+    measured qwen3.5 regression), so the nudge fires once and only for weak
+    models. ``None`` -> resolve the tier from the providers config.
     """
     spec_dir = spec_store._spec_dir(spec_id)
     spec = spec_store.load_artifact(spec_id, "feature_spec")
@@ -548,6 +577,7 @@ def run_implementation(
 
     best_of_n, bon_temperature = _resolve_bon(best_of_n, bon_temperature)
     constraints = extract_constraints(spec)
+    weak_model = _resolve_is_weak(is_weak, agent_name)
     schema_dict = TaskImplementation.model_json_schema()
     outcomes: List[TaskOutcome] = []
     commit_traces: List[CommitTrace] = []
@@ -591,6 +621,7 @@ def run_implementation(
             constraint_errs = ""
             last_error = None
             feedback = ""
+            prev_sig = None
             for attempt in range(repair_budget + 1):
                 user_task = base_prompt + feedback
                 n = best_of_n if (attempt == 0 and best_of_n > 1) else 1
@@ -646,14 +677,35 @@ def run_implementation(
                     last_error = None
                     break
 
+                # Adaptive early-stop: a repair round that produced identical
+                # code carries no new signal — more rounds won't help. Stop and
+                # report what we have instead of burning the rest of the budget.
+                sig = _code_sig(a.ti.files)
+                if attempt > 0 and sig == prev_sig:
+                    last_error = "verification failed; repair made no change (stopped early)"
+                    break
+                prev_sig = sig
+
                 last_error = "verification failed (test, rules, or constraints)"
                 diag = []
                 if not test_passed:
                     diag.append(f"FAILING TEST did not pass. Key diagnostics:\n{_excerpt_failure(a.test_out)}")
                 if a.rule_errs:
                     diag.append(f"BLOCKING rule violations:\n{a.rule_errs[:1500]}")
-                if constraint_errs:
+                # Constraint violations live in the INITIAL prompt; re-stating them
+                # every repair round primes strong models toward the banned token
+                # (the qwen3.5 regression). Nudge once, and only for weak models.
+                if constraint_errs and weak_model and attempt == 0:
                     diag.append(f"SPEC CONSTRAINT violations (the test won't catch these):\n{constraint_errs[:1500]}")
+                if not diag:
+                    # Nothing new to tell the model: the only blocker is a surviving
+                    # constraint we won't nudge on (strong model, or past the one
+                    # weak nudge). Blind re-prompting just primes — stop and let the
+                    # gate fail it honestly. Set last_error here so it's correct at
+                    # the break, not only via the outcome handler below.
+                    if constraint_errs:
+                        last_error = f"spec constraint not satisfied:\n{constraint_errs}"
+                    break
                 feedback = (
                     "\n\nPREVIOUS ATTEMPT FAILED verification. Fix these and return "
                     "the COMPLETE corrected files:\n" + "\n\n".join(diag)
@@ -663,8 +715,11 @@ def run_implementation(
             # forbids it) is a real failure even when the test passes — the test
             # can't catch it. rule_errs stays advisory-at-end, as before.
             ok = bool(test_passed and files_written and not constraint_errs)
-            if not ok and not last_error and constraint_errs:
-                last_error = f"spec constraint not satisfied:\n{constraint_errs}"
+            if not ok and constraint_errs:
+                # Surface the constraint as the reason: it's the sole blocker when
+                # the test passed, else append it to the test-failure message.
+                note = f"spec constraint not satisfied:\n{constraint_errs}"
+                last_error = note if test_passed else f"{last_error}\n{note}"
 
             # Commit even on failure (test or constraint) so the attempt is
             # preserved for inspection — same as the pre-existing test-fail path.
