@@ -96,6 +96,34 @@ helps where the base model *fails* — that regime exists for Llama-8b-class mod
 not for current Claude models on single-function coding. Don't expect a coding
 pass-rate gain from magent on the Claude family; its value there is structural.
 
+## Which models the coding levers help
+
+The axis is **single-function coding pass@1** (HumanEval / LiveCodeBench-class),
+not model size or recency. The coding levers (anti-pattern persona, low
+temperature, repair loop, best-of-N, constraint nudge) recover real pass-rate
+only where the base model *fails a single function one-shot*. Above that ceiling
+there is nothing to recover, so the value is structural (spec → plan → tasks →
+traceability, multi-agent gates), not pass-rate. Tuning decides, not size — a
+code-tuned 7b can be saturated while a general 8b is not.
+
+| Tier | Models (examples, 2026) | Single-fn pass@1 | magent coding effect |
+|---|---|---|---|
+| **Saturated** — no pass-rate gain, value is structural | Claude 3.5 / 3.7 / 4.x incl. Haiku 4.5, Sonnet, Opus; GPT-4o / 5.x; Gemini 1.5 / 2.x / 3.x; DeepSeek-V3 / R1; qwen3.5-122b. Code-tuned small: Qwen2.5-Coder 7b / 14b / 32b, Qwen3-Coder, DeepSeek-Coder-V2 | ≥ ~85% (frontier 90-96%) | Inert. Raw already passes; loop / BoN have nothing to recover. Measured: Haiku 4.5 = Opus-raw on 7 tasks; qwen3.5 uses `eval` 0/5 unprompted, and re-stating a constraint *primes* it |
+| **Headroom** — magent recovers real pass-rate | General, non-code-tuned, small / old / heavily-quantized: Llama-3.1-8b / 3.2-3b, Mistral-7b, Gemma-2-9b, Phi-3-mini, CodeLlama-7/13b, base (non-instruct), Q4-and-below large models | ~< 80% | Real gain. Two separate runs on llama-3.1-8b: anti-pattern persona 68→79% pass@1 and held-out 25→35; and the constraint gate cut silent `eval` violations 4/6→0/6 (attempt-0 `eval` 5/6→0/6) |
+| **Grey zone** — saturated on our suite, ambiguous externally | General large, not code-tuned: Llama-3.3-70b | ~73% HumanEval, but ~97% on our suite | Flat on pass-rate: raw already passes our tasks, so loop / BoN have nothing to recover. Only measurable lift is a few extra held-out cases under the loop (44/48 vs raw 41/48). The no-regression gate keeps it safe |
+
+Public pass@1 anchors (2026): frontier HumanEval clusters at 90-96% and no longer
+differentiates ([leaderboard](https://www.codesota.com/code-generation)); code-tuned
+small models reach the same band while general small models lag
+([Qwen2.5-Coder-32b 92.7%, Qwen2.5-7B-Instruct 84.8%, Llama-3.1-8b ~72.6% Q4](https://localaimaster.com/blog/best-ollama-models)).
+**Rule of thumb: if a model clears ~85% on HumanEval-class single-function coding,
+the coding levers are inert on it — use magent there for structure, not speed.**
+The saturation is the *single-function benchmark's*, not the model's: on
+multi-file / repository-level work even frontier models are far from ceiling
+([SWE-bench went <10% → >70% in a year, purely from scaffolding](https://arxiv.org/pdf/2603.20691)),
+which is where magent's structure is built to help. This benchmark is single-function
+by design (see [Caveats](#caveats)), so it measures the saturated regime, not that one.
+
 ## Production end-to-end
 
 The benchmark scores generation quality, not the `magent_implement` MCP pipeline.
@@ -170,10 +198,12 @@ the *initial-prompt* injection itself priming a saturated model — which is why
 repair nudge is **weak-model-only** and the initial injection is a candidate to
 gate by tier too.
 
-The rule, then: enforce on every tier (the gate keeps silent violations at 0
-everywhere), but **guide** (prompt injection + repair nudge) only weak models —
-strong models don't need it and the instruction backfires. Configure tier via
-`weak_models` in `config/providers.yaml`.
+The rule, then: **enforce** on every tier (the gate keeps silent violations at 0
+everywhere); the **repair nudge** is weak-model-only (shipped); the **initial
+injection** still runs on all tiers today, with weak-gating it an open option
+(strong models rarely violate an obvious constraint, and the injection itself
+mildly primes them). Tier is configured via `weak_models` in
+`config/providers.yaml`.
 
 ## Repair-loop economy
 
