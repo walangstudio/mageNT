@@ -531,7 +531,7 @@ def _resolve_is_weak(is_weak, agent_name):
         from .llm_adapter import resolve_model_info  # type: ignore
     try:
         return bool(resolve_model_info(agent_name).get("is_weak"))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 — tier resolution is best-effort; default not-weak
         return False
 
 
@@ -680,6 +680,7 @@ def run_implementation(
                 # Adaptive early-stop: a repair round that produced identical
                 # code carries no new signal — more rounds won't help. Stop and
                 # report what we have instead of burning the rest of the budget.
+                # (attempt 0 has no prior sig, so the guard skips the first pass.)
                 sig = _code_sig(a.ti.files)
                 if attempt > 0 and sig == prev_sig:
                     last_error = "verification failed; repair made no change (stopped early)"
