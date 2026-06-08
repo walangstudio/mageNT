@@ -170,10 +170,12 @@ the *initial-prompt* injection itself priming a saturated model — which is why
 repair nudge is **weak-model-only** and the initial injection is a candidate to
 gate by tier too.
 
-The rule, then: enforce on every tier (the gate keeps silent violations at 0
-everywhere), but **guide** (prompt injection + repair nudge) only weak models —
-strong models don't need it and the instruction backfires. Configure tier via
-`weak_models` in `config/providers.yaml`.
+The rule, then: **enforce** on every tier (the gate keeps silent violations at 0
+everywhere); the **repair nudge** is weak-model-only (shipped); the **initial
+injection** still runs on all tiers today, with weak-gating it an open option
+(strong models rarely violate an obvious constraint, and the injection itself
+mildly primes them). Tier is configured via `weak_models` in
+`config/providers.yaml`.
 
 ## Repair-loop economy
 
