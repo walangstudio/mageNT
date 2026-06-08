@@ -93,11 +93,26 @@ class GivenWhenThen(_Strict):
         return self
 
 
+class Constraint(_Strict):
+    """A hard code-level constraint the implementation must satisfy, beyond the
+    test: a banned (`forbid`) or mandatory (`require`) token. Enforced by the
+    implement loop, so a passing test that uses a forbidden means still fails."""
+
+    kind: Literal["forbid", "require"]
+    pattern: str = Field(..., min_length=1,
+                          description="Code token/identifier (e.g. 'eval', 'os.system'), or a regex when regex=True.")
+    message: str = Field(default="",
+                         description="Why — surfaced to the implementer on violation.")
+    regex: bool = Field(default=False, description="Treat `pattern` as a raw regex.")
+
+
 class FunctionalRequirement(_Strict):
     id: str = Field(..., pattern=r"^FR-\d{3}$",
                      description="FR-001 through FR-999, zero-padded.")
     statement: str = Field(..., min_length=10)
     rfc2119: RFC2119
+    constraints: List[Constraint] = Field(default_factory=list,
+                                            description="Hard banned/required code tokens, enforced beyond the test.")
     needs_clarification: List[str] = Field(default_factory=list,
                                              description="Open questions that block downstream phases.")
 

@@ -1,6 +1,6 @@
 # mageNT
 
-![version](https://img.shields.io/badge/version-0.7.6-blue)
+![version](https://img.shields.io/badge/version-0.8.0-blue)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
@@ -17,6 +17,14 @@ Ever wish Claude had deep expertise in specific areas? That's what mageNT does. 
 - Designing an API? Ask the API Developer
 
 Think of it like having 45 specialists on standby — Principals, Staff, and Senior engineers picked per role, plus a team-lead coordinator — each with their own specialty. You can also run a full spec-driven development cycle — from requirements to parallel implementation to delivery audit — with a single tool call per step, or spawn a parallel team of teammates in Claude Code (v2.1.32+).
+
+## What's new in 0.8
+
+Coding-quality work, with a committed benchmark to prove it ([`docs/raw-vs-magent-coding.md`](docs/raw-vs-magent-coding.md)): anti-over-engineering guardrails on all code agents, a configurable low code-gen temperature, a deeper structured-feedback repair loop, opt-in best-of-N execution selection in `magent_implement`, and **spec-level constraint enforcement** — a `FunctionalRequirement` can declare banned/required code tokens (`forbid eval`, `require async def`), and the implement loop fails any code that violates them even when the test passes. It closes a real gap a benchmark run found: a model satisfied a "no `eval()`" FR with `return eval(expr)` because the test only checked results.
+
+Constraint enforcement is **tier-aware**, learned from a live A/B: on a weak model (llama-8b) declaring the constraint cut silent violations 4/6→0/6; on a strong model (qwen3.5) re-stating it in the repair loop *primed* the banned token (eval 0→4/5). So the gate runs on every tier (silent violations stay 0), but the prompt guidance + repair nudge fire only for weak models (`weak_models` in `config/providers.yaml`). Plus repair-loop economy (identical-code early-stop, no blind re-prompt) and prompt-cache breakpoints on the Anthropic provider.
+
+**Read this before you expect a speed-up.** These levers move the needle only on *genuinely weak* models (Llama-3.1-8b-class run locally via Ollama / LM Studio / NIM), where the raw model actually fails. They do **not** help — and are mostly **inert** — when you run magent in **passthrough** mode (the default: the host Claude completes the prompt) or against a strong model. Measured: on weak Llama-8b, the guardrails recover a real persona regression (68% → 79% pass@1); on Llama-70b and the Claude family (tested down to Haiku 4.5) raw already passes, so the loop/best-of-N have nothing to recover. Temperature, the repair loop, and best-of-N fire **only** when magent drives a real API provider, never under passthrough. Constraint enforcement is the partial exception: the automated *check* needs a provider too, but declared constraints are rendered into the prompt, so the host Claude is told the banned/required tokens under passthrough as well. If your path is passthrough + Claude, magent's value is the **structure** (spec → plan → tasks → traceability, multi-agent gates), not raw code pass-rate.
 
 ## What's new in 0.7
 

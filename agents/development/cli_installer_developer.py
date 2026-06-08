@@ -4,11 +4,13 @@ from typing import List
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class CLIInstallerDeveloper(BaseAgent):
+class CLIInstallerDeveloper(CodeDisciplineMixin, BaseAgent):
     """CLI/Agent Installer Developer specializing in installation scripts, setup wizards, and agent deployment tooling."""
 
     @property

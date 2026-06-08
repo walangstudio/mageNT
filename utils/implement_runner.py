@@ -52,6 +52,11 @@ try:
 except ImportError:  # pragma: no cover
     from .spec_pipeline import _default_llm_call, _extract_and_validate  # type: ignore
 
+try:
+    from utils.constraints import check_files, extract_constraints
+except ImportError:  # pragma: no cover
+    from .constraints import check_files, extract_constraints  # type: ignore
+
 
 @dataclass
 class TaskOutcome:
@@ -155,12 +160,27 @@ _EXAMPLE_TASK_IMPL_SHAPE = '''{
 }'''
 
 
+def _constraints_for_task(task: Task, constraints) -> List[str]:
+    """The constraint lines relevant to one task: those declared on its FRs plus
+    spec-wide ones mined from success criteria."""
+    scope = set(task.fr_ids) | {"success_criteria"}
+    lines = []
+    for c in constraints:
+        if c.source and c.source not in scope:
+            continue
+        verb = "must NOT use" if c.kind == "forbid" else "MUST use"
+        why = f" ({c.message})" if c.message else ""
+        lines.append(f"  - {verb} `{c.pattern}`{why}")
+    return lines
+
+
 def _build_task_prompt(
     task: Task,
     spec: FeatureSpec,
     plan: ImplementationPlan,
     failing_test_source: str,
     framework: TestFramework,
+    constraints=(),
 ) -> str:
     """Build the user message for a single task.
 
@@ -171,13 +191,24 @@ def _build_task_prompt(
     optimization for a much smaller prompt that local models can actually
     process. Frontier models (Claude, GPT-OSS-120b) get the same prompt
     and produce equivalent code without the test-source crutch.
+
+    Declared spec constraints are rendered explicitly so the implementer (a
+    provider model, or the host under passthrough) is told the banned/required
+    tokens up front — the test alone can't communicate them.
     """
     relevant_frs = [r for r in spec.requirements if r.id in task.fr_ids]
+    constraint_lines = _constraints_for_task(task, constraints)
+    constraint_block = (
+        "\n\nHard constraints (the test does NOT check these — obey them anyway):\n"
+        + "\n".join(constraint_lines)
+        if constraint_lines else ""
+    )
     return (
         f"Task {task.id}: {task.title}\n"
         f"Files: {task.files}\n"
         f"FR(s) to satisfy:\n"
         + "\n".join(f"  - {r.id} ({r.rfc2119}): {r.statement}" for r in relevant_frs)
+        + constraint_block
         + f"\n\nLanguage: {plan.tech_stack.language}\n"
         + f"Test runner: {framework.runner_command.format(path=task.failing_test_path)}\n"
         + f"\nOutput ONE JSON object matching this shape (replace <placeholders>):\n"
@@ -299,6 +330,39 @@ def _run_test(framework: TestFramework, workspace: Path, test_path: str) -> bool
     return _run_test_verbose(framework, workspace, test_path)[0]
 
 
+_FAIL_MARKERS = (
+    "Error", "Exception", "assert", "AssertionError", "FAILED", "Traceback",
+    "E   ", "expected", "actual", "!=", "Expected", "Received",
+)
+
+
+def _excerpt_failure(output: str, limit: int = 2000) -> str:
+    """Pull the signal out of a test runner's output for repair feedback.
+
+    A raw 2500-char truncation often clips the assertion and keeps pytest's
+    collection banner. This keeps the lines that carry the diagnosis (assertion
+    / exception / expected-vs-actual) plus the tail, which is what the model
+    needs to fix the code.
+    """
+    if not output:
+        return "(no test output)"
+    lines = output.splitlines()
+    keep, seen = [], set()
+    for ln in lines:
+        s = ln.strip()
+        if s and s not in seen and any(m in ln for m in _FAIL_MARKERS):
+            keep.append(ln.rstrip())
+            seen.add(s)
+    parts = []
+    if keep:
+        parts.append("Key lines:\n" + "\n".join(keep[:25]))
+    tail = [ln.rstrip() for ln in lines[-12:] if ln.strip()]
+    if tail:
+        parts.append("Tail:\n" + "\n".join(tail))
+    text = "\n\n".join(parts) or output
+    return text[:limit]
+
+
 def _rules_errors(project_dir: Path, files_written: List[str]) -> str:
     """ERROR-level rule violations on the written files (release profile).
 
@@ -369,6 +433,108 @@ def _ordered_tasks(run_tasks: List[Task]) -> List[Task]:
     return ordered
 
 
+@dataclass
+class _Attempt:
+    """Outcome of one generate -> apply -> verify cycle (a best-of-N candidate)."""
+    ti: Optional[Any]
+    files_written: List[str]
+    test_passed: bool
+    test_out: str
+    rule_errs: str
+    parse_err: Optional[str]
+    apply_err: Optional[str]
+    usage: Dict[str, Any]
+    constraint_errs: str = ""
+
+
+def _attempt_once(llm_call, agent_name, sys_prompt, user_task, schema_dict,
+                   task_id, project_dir, framework, test_rel, temperature,
+                   constraints=()):
+    """Generate one candidate, apply it, run the failing test + rules + constraints.
+
+    Tolerates injected ``llm_call`` stubs that don't accept the schema /
+    temperature kwargs (falls back progressively). Returns ``(_Attempt, raw)``.
+    """
+    try:
+        raw, usage = llm_call(agent_name, sys_prompt, user_task, None,
+                               response_schema=schema_dict,
+                               schema_name="TaskImplementation",
+                               temperature=temperature)
+    except TypeError:
+        try:
+            raw, usage = llm_call(agent_name, sys_prompt, user_task, None,
+                                   response_schema=schema_dict,
+                                   schema_name="TaskImplementation")
+        except TypeError:
+            raw, usage = llm_call(agent_name, sys_prompt, user_task, None)
+
+    ti, err = _coerce_task_implementation(raw, task_id)
+    if ti is None:
+        return _Attempt(None, [], False, "", "", err or "invalid", None, usage), raw
+    if ti.task_id != task_id:
+        ti = ti.model_copy(update={"task_id": task_id})
+    try:
+        files = _apply_files(project_dir, ti.files)
+    except ValueError as ve:
+        return _Attempt(ti, [], False, "", "", None, str(ve), usage), raw
+    test_passed, test_out = _run_test_verbose(framework, project_dir, test_rel)
+    rule_errs = _rules_errors(project_dir, files)
+    constraint_errs = check_files(project_dir, files, constraints) if constraints else ""
+    return _Attempt(ti, files, test_passed, test_out, rule_errs, None, None,
+                    usage, constraint_errs), raw
+
+
+def _select_best(attempts: List["_Attempt"]) -> "_Attempt":
+    """Execution-based selection: prefer a fully-clean candidate (test passes, no
+    rule or spec-constraint violations), else one that at least parsed and
+    applied cleanly, else the first."""
+    for a in attempts:
+        if a.test_passed and not a.rule_errs and not a.constraint_errs:
+            return a
+    for a in attempts:
+        if a.parse_err is None and a.apply_err is None:
+            return a
+    return attempts[0]
+
+
+def _resolve_bon(best_of_n, bon_temperature):
+    """Defaults from providers config when not explicitly passed."""
+    if best_of_n is not None and bon_temperature is not None:
+        return max(1, best_of_n), bon_temperature
+    try:
+        from utils.llm_adapter import _load_providers_config
+    except ImportError:  # pragma: no cover
+        from .llm_adapter import _load_providers_config  # type: ignore
+    cfg = _load_providers_config()
+    if best_of_n is None:
+        best_of_n = cfg.get("code_best_of_n", 1)
+    if bon_temperature is None:
+        bon_temperature = cfg.get("code_best_of_n_temperature", 0.4)
+    return max(1, best_of_n), bon_temperature
+
+
+def _code_sig(files) -> str:
+    """Order-independent signature of an attempt's produced files, used to
+    detect a repair round that changed nothing (stop early — no new signal)."""
+    return "\n".join(sorted(f"{f.path}\0{f.content}" for f in files))
+
+
+def _resolve_is_weak(is_weak, agent_name):
+    """Caller override wins; otherwise resolve the model tier from config.
+    Strong/unknown -> not weak (the constraint repair-nudge is skipped so it
+    can't prime the model, per the qwen3.5 regression)."""
+    if is_weak is not None:
+        return bool(is_weak)
+    try:
+        from utils.llm_adapter import resolve_model_info
+    except ImportError:  # pragma: no cover
+        from .llm_adapter import resolve_model_info  # type: ignore
+    try:
+        return bool(resolve_model_info(agent_name).get("is_weak"))
+    except Exception:  # noqa: BLE001 — tier resolution is best-effort; default not-weak
+        return False
+
+
 def run_implementation(
     spec_store: SpecStore,
     spec_id: str,
@@ -376,12 +542,21 @@ def run_implementation(
     agent_name: str = "fullstack_developer",
     task_ids: Optional[List[str]] = None,
     llm_call: Callable = _default_llm_call,
-    repair_budget: int = 2,
+    repair_budget: int = 3,
+    best_of_n: Optional[int] = None,
+    bon_temperature: Optional[float] = None,
+    is_weak: Optional[bool] = None,
 ) -> ImplementRunResult:
     """Drive the full per-task implementation loop.
 
     ``project_dir`` is where files land + commits happen. If it is not yet a
     git repo, this initialises one.
+
+    ``is_weak`` controls whether a constraint violation is re-stated in the
+    repair feedback. The constraint is ALWAYS in the initial prompt; re-stating
+    it each repair round primes strong models toward the banned token (the
+    measured qwen3.5 regression), so the nudge fires once and only for weak
+    models. ``None`` -> resolve the tier from the providers config.
     """
     spec_dir = spec_store._spec_dir(spec_id)
     spec = spec_store.load_artifact(spec_id, "feature_spec")
@@ -400,6 +575,9 @@ def run_implementation(
     wanted_ids = set(task_ids) if task_ids else {t.id for t in tasks.tasks}
     run_tasks = _ordered_tasks([t for t in tasks.tasks if t.id in wanted_ids])
 
+    best_of_n, bon_temperature = _resolve_bon(best_of_n, bon_temperature)
+    constraints = extract_constraints(spec)
+    weak_model = _resolve_is_weak(is_weak, agent_name)
     schema_dict = TaskImplementation.model_json_schema()
     outcomes: List[TaskOutcome] = []
     commit_traces: List[CommitTrace] = []
@@ -424,7 +602,8 @@ def run_implementation(
             shutil.copy2(test_full, project_test)
         test_rel = str(project_test.relative_to(project_dir)).replace("\\", "/")
 
-        base_prompt = _build_task_prompt(task, spec, plan, failing_test_source, framework)
+        base_prompt = _build_task_prompt(task, spec, plan, failing_test_source,
+                                          framework, constraints)
         sys_prompt = (
             "You are a senior implementer. Output a single TaskImplementation JSON "
             "object — no prose, no code fence. Files must be COMPLETE contents, "
@@ -435,66 +614,118 @@ def run_implementation(
         _write_active_task(spec_dir, task.id)
         try:
             # generate -> apply -> verify -> repair, up to repair_budget retries.
+            # Attempt 0 draws best_of_n diverse candidates and execution-selects;
+            # repair attempts are single-sample with accumulated feedback.
             files_written: List[str] = []
             test_passed = False
+            constraint_errs = ""
             last_error = None
             feedback = ""
+            prev_sig = None
             for attempt in range(repair_budget + 1):
                 user_task = base_prompt + feedback
-                try:
-                    raw, usage = llm_call(
-                        agent_name, sys_prompt, user_task, None,
-                        response_schema=schema_dict, schema_name="TaskImplementation",
-                    )
-                except TypeError:
-                    raw, usage = llm_call(agent_name, sys_prompt, user_task, None)
-                spec_store.record_phase_cost(spec_id, "implementation_trace", {
-                    "task": task.id, "agent": agent_name, "attempt": attempt, **usage,
-                })
+                n = best_of_n if (attempt == 0 and best_of_n > 1) else 1
+                temp = bon_temperature if n > 1 else None
 
-                ti, err = _coerce_task_implementation(raw, task.id)
-                if ti is None:
+                tries: List[_Attempt] = []
+                last_raw = ""
+                for cand in range(n):
+                    a, last_raw = _attempt_once(
+                        llm_call, agent_name, sys_prompt, user_task, schema_dict,
+                        task.id, project_dir, framework, test_rel, temp,
+                        constraints,
+                    )
+                    spec_store.record_phase_cost(spec_id, "implementation_trace", {
+                        "task": task.id, "agent": agent_name, "attempt": attempt,
+                        "candidate": cand, **a.usage,
+                    })
+                    tries.append(a)
+                    if a.test_passed and not a.rule_errs and not a.constraint_errs:
+                        break  # first fully-clean candidate wins
+                a = _select_best(tries)
+
+                if a.ti is None:
                     debug_path = spec_dir / f".debug_{task.id}_raw.txt"
                     try:
-                        debug_path.write_text(raw, encoding="utf-8")
+                        debug_path.write_text(last_raw, encoding="utf-8")
                     except OSError:
                         pass
-                    last_error = f"agent output invalid: {err}; raw saved to {debug_path.name}"
+                    last_error = f"agent output invalid: {a.parse_err}; raw saved to {debug_path.name}"
                     feedback = (
                         f"\n\nPREVIOUS ATTEMPT was not valid TaskImplementation JSON: "
-                        f"{err}\nReturn ONLY a valid TaskImplementation JSON object."
+                        f"{a.parse_err}\nReturn ONLY a valid TaskImplementation JSON object."
                     )
                     continue
-                if ti.task_id != task.id:
-                    ti = ti.model_copy(update={"task_id": task.id})
-
-                try:
-                    files_written = _apply_files(project_dir, ti.files)
-                except ValueError as ve:
-                    last_error = str(ve)
-                    feedback = f"\n\nPREVIOUS ATTEMPT could not be applied: {ve}\nFix the file paths/contents."
+                if a.apply_err:
+                    last_error = a.apply_err
+                    feedback = f"\n\nPREVIOUS ATTEMPT could not be applied: {a.apply_err}\nFix the file paths/contents."
                     continue
 
-                # Verify: the failing test must pass AND no ERROR-level rule
-                # violations in the written code. Lint/typecheck diagnostics are
-                # included as repair hints when the tools are installed.
-                test_passed, test_out = _run_test_verbose(framework, project_dir, test_rel)
-                rule_errs = _rules_errors(project_dir, files_written)
-                if test_passed and not rule_errs:
+                files_written = a.files_written
+                # If best-of-N picked a candidate that ISN'T the last one tried,
+                # a later candidate overwrote its files on disk; re-apply the
+                # winner so disk == selection before commit. (When the winner is
+                # the last candidate, disk already matches.)
+                if n > 1 and a is not tries[-1]:
+                    try:
+                        files_written = _apply_files(project_dir, a.ti.files)
+                    except ValueError:
+                        files_written = a.files_written
+                test_passed = a.test_passed
+                constraint_errs = a.constraint_errs
+                if test_passed and not a.rule_errs and not constraint_errs:
                     last_error = None
                     break
 
-                last_error = "verification failed (test or rules)"
+                # Adaptive early-stop: a repair round that produced identical
+                # code carries no new signal — more rounds won't help. Stop and
+                # report what we have instead of burning the rest of the budget.
+                # (attempt 0 has no prior sig, so the guard skips the first pass.)
+                sig = _code_sig(a.ti.files)
+                if attempt > 0 and sig == prev_sig:
+                    last_error = "verification failed; repair made no change (stopped early)"
+                    break
+                prev_sig = sig
+
+                last_error = "verification failed (test, rules, or constraints)"
                 diag = []
                 if not test_passed:
-                    diag.append(f"FAILING TEST did not pass. Output:\n{test_out[:2500]}")
-                if rule_errs:
-                    diag.append(f"BLOCKING rule violations:\n{rule_errs[:1500]}")
+                    diag.append(f"FAILING TEST did not pass. Key diagnostics:\n{_excerpt_failure(a.test_out)}")
+                if a.rule_errs:
+                    diag.append(f"BLOCKING rule violations:\n{a.rule_errs[:1500]}")
+                # Constraint violations live in the INITIAL prompt; re-stating them
+                # every repair round primes strong models toward the banned token
+                # (the qwen3.5 regression). Nudge once, and only for weak models.
+                if constraint_errs and weak_model and attempt == 0:
+                    diag.append(f"SPEC CONSTRAINT violations (the test won't catch these):\n{constraint_errs[:1500]}")
+                if not diag:
+                    # Nothing new to tell the model: the only blocker is a surviving
+                    # constraint we won't nudge on (strong model, or past the one
+                    # weak nudge). Blind re-prompting just primes — stop and let the
+                    # gate fail it honestly. Set last_error here so it's correct at
+                    # the break, not only via the outcome handler below.
+                    if constraint_errs:
+                        last_error = f"spec constraint not satisfied:\n{constraint_errs}"
+                    break
                 feedback = (
                     "\n\nPREVIOUS ATTEMPT FAILED verification. Fix these and return "
                     "the COMPLETE corrected files:\n" + "\n\n".join(diag)
                 )
 
+            # A surviving spec-constraint violation (e.g. used eval() when the FR
+            # forbids it) is a real failure even when the test passes — the test
+            # can't catch it. rule_errs stays advisory-at-end, as before.
+            ok = bool(test_passed and files_written and not constraint_errs)
+            if not ok and constraint_errs:
+                # Surface the constraint as the reason: it's the sole blocker when
+                # the test passed, else append it to the test-failure message.
+                note = f"spec constraint not satisfied:\n{constraint_errs}"
+                last_error = note if test_passed else f"{last_error}\n{note}"
+
+            # Commit even on failure (test or constraint) so the attempt is
+            # preserved for inspection — same as the pre-existing test-fail path.
+            # The trace records `ok`, NOT the raw test result, so a constraint
+            # violation is never logged as a clean pass for a downstream gate.
             commit_sha = _commit(
                 project_dir, files_written + [test_rel], task.title, task.fr_ids,
             ) if files_written else None
@@ -503,13 +734,13 @@ def run_implementation(
                 task_id=task.id, fr_ids=task.fr_ids,
                 files_written=files_written, test_passed=test_passed,
                 commit_sha=commit_sha,
-                error=None if (test_passed and files_written) else last_error,
+                error=None if ok else last_error,
             ))
             if commit_sha:
                 for fr in task.fr_ids:
                     commit_traces.append(CommitTrace(
                         fr_id=fr, task_id=task.id, commit_sha=commit_sha,
-                        files=files_written, test_passed=test_passed,
+                        files=files_written, test_passed=ok,
                     ))
         finally:
             _clear_active_task(spec_dir)

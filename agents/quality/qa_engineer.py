@@ -4,11 +4,13 @@ from typing import List, Sequence, Tuple
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class QAEngineer(BaseAgent):
+class QAEngineer(CodeDisciplineMixin, BaseAgent):
     """QA Engineer covering manual testing, test strategy, and full-stack quality assurance."""
 
     @property

@@ -70,6 +70,7 @@ def dispatch_full(
     context: Optional[str] = None,
     response_schema: Optional[Dict[str, Any]] = None,
     schema_name: str = "Response",
+    temperature: Optional[float] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """Sync dispatch returning ``(text, usage_dict)``.
 
@@ -77,22 +78,28 @@ def dispatch_full(
     ``Pydantic.BaseModel.model_json_schema()``). When set, OpenAI-compatible
     providers receive grammar-constrained output. ``usage_dict`` contains
     provider-reported token counts when available; ``{}`` otherwise.
+
+    ``temperature``: explicit override; when ``None`` it is resolved from the
+    providers config (``_get_temperature``). Best-of-N candidate generation
+    passes a higher value here to get sampling diversity.
     """
     cfg = _load_providers_config()
     provider = cfg.get('agent_providers', {}).get(agent_name) or cfg.get('default_provider', 'passthrough')
     model = _get_model(cfg, provider, agent_name)
+    if temperature is None:
+        temperature = _get_temperature(cfg, agent_name)
 
     if provider == 'anthropic':
         return _dispatch_anthropic(model, system_prompt, task, context, cfg,
-                                     response_schema, schema_name)
+                                     response_schema, schema_name, temperature)
     if provider == 'ollama':
         return _dispatch_ollama(model, system_prompt, task, context, cfg,
-                                  response_schema)
+                                  response_schema, temperature)
     provider_cfg = cfg.get('providers', {}).get(provider, {})
     if provider_cfg.get('type') == 'openai_compatible':
         return _dispatch_openai_compat(model, system_prompt, task, context,
                                           provider, provider_cfg,
-                                          response_schema, schema_name)
+                                          response_schema, schema_name, temperature)
     return _dispatch_passthrough(system_prompt, task, context), {}
 
 
@@ -106,17 +113,59 @@ def _get_model(cfg, provider, agent_name):
     )
 
 
+def resolve_model_info(agent_name: str) -> Dict[str, Any]:
+    """Resolve the provider, model, and weak/strong tier for an agent.
+
+    `is_weak` is True only when the resolved model name matches a substring in
+    the `weak_models` config list (e.g. "8b", "7b", "3b"). Unknown models
+    default to NOT weak — the conservative choice, since the constraint
+    repair-nudge that keys off this can prime a strong model (the documented
+    qwen3.5 regression). Repair on the external test signal is unaffected.
+    """
+    cfg = _load_providers_config()
+    provider = cfg.get('agent_providers', {}).get(agent_name) or cfg.get('default_provider', 'passthrough')
+    model = _get_model(cfg, provider, agent_name)
+    weak = cfg.get('weak_models') or []
+    is_weak = bool(model and any(str(w).lower() in model.lower() for w in weak))
+    return {"provider": provider, "model": model, "is_weak": is_weak}
+
+
+def _get_temperature(cfg, agent_name):
+    """Resolve sampling temperature for an agent (None = provider default).
+
+    Precedence: explicit ``agent_temperature[agent]`` > ``code_temperature`` for
+    agents listed in ``code_agents`` > global ``default_temperature`` > None.
+    Code/test generation wants a low temperature (higher pass@1); design and
+    ideation agents are left warm.
+    """
+    at = cfg.get('agent_temperature') or {}
+    if agent_name in at:
+        return at[agent_name]
+    code_agents = cfg.get('code_agents') or []
+    if agent_name in code_agents:
+        ct = cfg.get('code_temperature')
+        if ct is not None:
+            return ct
+        # code_temperature unset: fall to default_temperature, else a cool 0.1.
+        return cfg.get('default_temperature', 0.1)
+    return cfg.get('default_temperature', None)
+
+
 def _get_api_key(provider, provider_cfg):
     return os.environ.get(f'{provider.upper()}_API_KEY') or provider_cfg.get('api_key') or None
 
 
 def _dispatch_passthrough(system_prompt, task, context):
+    # ORDERING INVARIANT (do not reorder): the static system prompt comes FIRST,
+    # volatile content (context, task) LAST. The host completing this blob caches
+    # on its stable prefix; putting the persona first lets that cache survive
+    # across the many per-task calls in one run. A test pins this.
     body = f"{context}\n\n---\n\nTask: {task}" if context else task
     return f"{system_prompt}\n\n---\n\n{body}"
 
 
 def _dispatch_anthropic(model, system_prompt, task, context, cfg,
-                          response_schema, schema_name):
+                          response_schema, schema_name, temperature=None):
     api_key = _get_api_key('anthropic', cfg.get('providers', {}).get('anthropic', {}))
     if not api_key:
         return _dispatch_passthrough(system_prompt, task, context), {}
@@ -124,8 +173,17 @@ def _dispatch_anthropic(model, system_prompt, task, context, cfg,
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
-        kwargs = dict(model=model, max_tokens=8096, system=system_prompt,
+        # Mark the static system prompt as a cache breakpoint: a multi-task run
+        # re-sends the same persona every call, so caching it cuts input cost
+        # ~90% / latency ~85% on the prefix. Below the model's cache minimum the
+        # API silently ignores cache_control (no-op, never an error). Default 5m
+        # ephemeral tier — the only TTL settable without a beta header.
+        system_blocks = [{"type": "text", "text": system_prompt,
+                           "cache_control": {"type": "ephemeral"}}]
+        kwargs = dict(model=model, max_tokens=8096, system=system_blocks,
                        messages=[{"role": "user", "content": content}])
+        if temperature is not None:
+            kwargs["temperature"] = temperature
         # Schema-constrained output via tool-use trick: define a single tool
         # whose input_schema IS the desired output, then force it. Anthropic
         # SDK 0.40+ supports this idiom; older SDKs ignore it gracefully.
@@ -142,7 +200,9 @@ def _dispatch_anthropic(model, system_prompt, task, context, cfg,
         if hasattr(resp, "usage"):
             u = resp.usage
             usage = {"input_tokens": getattr(u, "input_tokens", 0),
-                      "output_tokens": getattr(u, "output_tokens", 0)}
+                      "output_tokens": getattr(u, "output_tokens", 0),
+                      "cache_creation_input_tokens": getattr(u, "cache_creation_input_tokens", 0) or 0,
+                      "cache_read_input_tokens": getattr(u, "cache_read_input_tokens", 0) or 0}
         # Extract text — either from a tool_use block (schema mode) or text block.
         for block in resp.content:
             if getattr(block, "type", "") == "tool_use" and getattr(block, "input", None):
@@ -155,7 +215,8 @@ def _dispatch_anthropic(model, system_prompt, task, context, cfg,
         return _dispatch_passthrough(system_prompt, task, context), {}
 
 
-def _dispatch_ollama(model, system_prompt, task, context, cfg, response_schema):
+def _dispatch_ollama(model, system_prompt, task, context, cfg, response_schema,
+                       temperature=None):
     base_url = cfg.get('providers', {}).get('ollama', {}).get('base_url', 'http://localhost:11434')
     prompt = (
         f"{system_prompt}\n\n{context}\n\n---\n\nTask: {task}"
@@ -164,6 +225,8 @@ def _dispatch_ollama(model, system_prompt, task, context, cfg, response_schema):
     try:
         import requests
         payload = {"model": model, "prompt": prompt, "stream": False}
+        if temperature is not None:
+            payload["options"] = {"temperature": temperature}
         # Ollama supports JSON-schema constraint via `format` since v0.5.
         if response_schema:
             payload["format"] = response_schema
@@ -183,7 +246,8 @@ def _dispatch_ollama(model, system_prompt, task, context, cfg, response_schema):
 
 
 def _dispatch_openai_compat(model, system_prompt, task, context, provider,
-                              provider_cfg, response_schema, schema_name):
+                              provider_cfg, response_schema, schema_name,
+                              temperature=None):
     api_key = _get_api_key(provider, provider_cfg)
     base_url = provider_cfg.get('base_url', 'https://api.openai.com/v1').rstrip('/')
     content = f"{context}\n\n---\n\nTask: {task}" if context else task
@@ -198,6 +262,8 @@ def _dispatch_openai_compat(model, system_prompt, task, context, provider,
             {'role': 'user', 'content': content},
         ],
     }
+    if temperature is not None:
+        payload['temperature'] = temperature
     if response_schema:
         # OpenAI / LM Studio / NVIDIA NIM all accept this shape. Strict mode
         # forces grammar-constrained output — the model literally cannot emit

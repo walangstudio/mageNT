@@ -4,11 +4,13 @@ from typing import List
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class HonoDeveloper(BaseAgent):
+class HonoDeveloper(CodeDisciplineMixin, BaseAgent):
     """Hono Developer specializing in edge-first TypeScript web APIs."""
 
     @property

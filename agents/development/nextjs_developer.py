@@ -4,11 +4,13 @@ from typing import List
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class NextJSDeveloper(BaseAgent):
+class NextJSDeveloper(CodeDisciplineMixin, BaseAgent):
     """Next.js Developer specializing in modern Next.js applications."""
 
     @property

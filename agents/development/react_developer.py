@@ -4,11 +4,13 @@ from typing import List
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class ReactDeveloper(BaseAgent):
+class ReactDeveloper(CodeDisciplineMixin, BaseAgent):
     """React Frontend Developer specializing in modern React development."""
 
     @property

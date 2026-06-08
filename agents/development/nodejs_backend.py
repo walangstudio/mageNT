@@ -4,11 +4,13 @@ from typing import List
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class NodeJSBackend(BaseAgent):
+class NodeJSBackend(CodeDisciplineMixin, BaseAgent):
     """Node.js Backend Developer specializing in server-side JavaScript/TypeScript."""
 
     @property

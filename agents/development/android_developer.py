@@ -4,11 +4,13 @@ from typing import List
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class AndroidDeveloper(BaseAgent):
+class AndroidDeveloper(CodeDisciplineMixin, BaseAgent):
     """Android Developer specializing in native Android apps with Kotlin and Java."""
 
     @property

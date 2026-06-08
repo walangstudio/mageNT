@@ -6,6 +6,72 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.0] - 2026-06-05
+
+### Added
+
+- **Objective coding benchmark as a committable gate.**
+  `tests/prompt_eval/coding/` now ships 16 tasks (Python + JavaScript) each with
+  a **visible** test and a never-shown **held-out** test (anti-gaming), an
+  OpenAI-compatible provider runner (NVIDIA NIM, truststore TLS), `--trials`, and
+  a `best_of_n` condition. Baseline + after results in `results/`; full write-up
+  in [`docs/raw-vs-magent-coding.md`](docs/raw-vs-magent-coding.md).
+- **Best-of-N execution selection** in `magent_implement` (opt-in
+  `code_best_of_n` in `config/providers.yaml`): sample N candidates at a higher
+  temperature on the first attempt, keep the one that passes the failing test.
+  Default 1 (single sample), so behaviour is unchanged until enabled. Inert under
+  passthrough.
+- **Spec-level constraint enforcement** — close the "the test isn't the whole
+  spec" gap an e2e run exposed (llama-3.1-8b passed an `eval()`-free FR by
+  writing `return eval(expr)`; the visible test only checked results).
+  `FunctionalRequirement` gains a typed `constraints` list (`forbid`/`require` a
+  code token, optional regex), and a narrow heuristic also mines FR /
+  success-criteria prose for the common "no `eval()`" / "without subprocess"
+  shape. The implement loop checks the written code against them
+  (`utils/constraints.py`): a violated `forbid` (e.g. `eval` used when the FR
+  bans it) drives the repair loop and, if it survives, fails the task outcome
+  even when the test passes — and is never recorded as a clean pass in the
+  trace. Declared constraints are also rendered into the task prompt, so the
+  host sees them under passthrough. No constraints declared -> zero behaviour
+  change. (`agents/spec_schemas.py`, `utils/implement_runner.py`,
+  `tests/test_constraints.py`.)
+
+### Changed
+
+- **Adaptive, model-aware repair loop** (`utils/implement_runner.py`). A live A/B
+  showed re-stating a spec constraint each repair round *primes* a strong model
+  toward the banned token (qwen3.5 `eval` 0→4/5; the
+  [LLMs-cannot-self-correct](https://arxiv.org/abs/2310.01798) effect). Now the
+  constraint lives in the initial prompt only; the repair loop re-states it once
+  and only for weak models (`weak_models` in `config/providers.yaml`), the gate
+  still enforces it on every tier (silent violations stay 0). Plus identical-code
+  early-stop and no-blind-re-prompt to cut wasted provider calls
+  ([BEACON](https://arxiv.org/html/2510.15945)). Measured: weak-model (llama-8b)
+  silent violations 4/6→0/6; strong-model repair-amplification removed
+  (final `eval` 4/5→2/5).
+- **Prompt-cache breakpoints on the Anthropic provider** (`utils/llm_adapter.py`):
+  the static system prompt is sent with `cache_control`, and usage now reports
+  cache create/read tokens — ~90% input cost / ~85% latency off the prefix on a
+  multi-task run. Dispatchers keep static-prefix/volatile-suffix ordering (pinned
+  by a passthrough-ordering test).
+- **Anti-over-engineering guardrails on all 26 code agents** (`CodeDisciplineMixin`):
+  no top-level demo/`print()` statements, no standard-library-name shadowing
+  (the `parse_qs` RecursionError class of bug), no needless class/Enum
+  scaffolding, output only the requested symbols. Measured: recovered the
+  weak-model persona regression (llama-3.1-8b persona 68%->79%, held-out 25->35)
+  and improved the strong model (llama-3.3-70b persona 85%->93%, repair loop to a
+  perfect 48/48). No regression on either model.
+- **Code-generation temperature is now configurable and low by default**
+  (`code_temperature: 0.1` for code/test agents; design agents stay warm).
+  Threaded through every dispatcher in `utils/llm_adapter.py`. Lower temperature
+  raises pass@1 and removes the nondeterminism seen at the provider default.
+  No effect on passthrough.
+- **Deeper repair loop**: default budget 2->3, and failure feedback now sends a
+  structured excerpt (assertion / exception / tail) instead of a blind
+  2500-character truncation.
+
+---
+
 ## [0.7.6] - 2026-06-04
 
 ### Fixed

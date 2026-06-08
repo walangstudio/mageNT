@@ -4,11 +4,13 @@ from typing import List
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class FlutterDeveloper(BaseAgent):
+class FlutterDeveloper(CodeDisciplineMixin, BaseAgent):
     """Flutter Developer specializing in cross-platform apps with Dart and Flutter."""
 
     @property

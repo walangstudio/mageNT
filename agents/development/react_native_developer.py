@@ -4,11 +4,13 @@ from typing import List
 
 try:
     from agents.base import BaseAgent
+    from agents.code_discipline import CodeDisciplineMixin
 except ImportError:
     from ..base import BaseAgent
+    from ..code_discipline import CodeDisciplineMixin
 
 
-class ReactNativeDeveloper(BaseAgent):
+class ReactNativeDeveloper(CodeDisciplineMixin, BaseAgent):
     """React Native Developer specializing in cross-platform mobile apps with JavaScript/TypeScript."""
 
     @property
