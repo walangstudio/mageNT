@@ -125,6 +125,11 @@ agents:
     expertise_level: "senior"
     specialization: "React Native, Expo, TypeScript, React Navigation, EAS"
 
+  mobile_ux_engineer:
+    enabled: false
+    expertise_level: "senior"
+    specialization: "Micro-interactions, spring press states, haptics, keyboard UX, empty states, permission priming"
+
   android_developer:
     enabled: false
     expertise_level: "senior"

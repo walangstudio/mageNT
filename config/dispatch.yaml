@@ -133,6 +133,7 @@ agents:
   ios_developer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   java_backend:             {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   mobile_developer:         {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  mobile_ux_engineer:       {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   nextjs_developer:         {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   nodejs_backend:           {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   php_developer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}

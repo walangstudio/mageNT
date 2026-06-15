@@ -59,6 +59,7 @@ class AndroidDeveloper(CodeDisciplineMixin, BaseAgent):
             "Sensitive permissions need a Play Console declaration or get the app removed: ACCESS_BACKGROUND_LOCATION, QUERY_ALL_PACKAGES, MANAGE_EXTERNAL_STORAGE, SMS/Call-Log, com.google.android.gms.permission.AD_ID — use scoped <queries> instead of QUERY_ALL_PACKAGES where possible",
             "Publish as an Android App Bundle (.aab) with Play App Signing; if you ship native .so libs, 16 KB page-alignment is required (since 2025-11-01) — needs AGP 8.5.1+",
             "Provide a privacy-policy URL and keep declared permissions consistent with the Data safety form",
+            "For native-feel polish — Compose clickable scale physics, SharedTransitionLayout, LocalHapticFeedback, Modifier.imePadding()/imeNestedScroll(), shimmer/skeleton empty states, pre-onboarding permission rationale — consult the mobile_ux_engineer",
         ]
 
     @property

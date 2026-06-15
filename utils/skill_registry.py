@@ -36,6 +36,7 @@ AGENT_SKILL_AFFINITIES: Dict[str, List[str]] = {
     "mobile_developer": ["generate_tests", "debug_code", "app_store_check"],
     "flutter_developer": ["generate_tests", "debug_code", "app_store_check"],
     "react_native_developer": ["scaffold_react", "generate_tests", "debug_code", "app_store_check"],
+    "mobile_ux_engineer": ["generate_tests", "debug_code", "app_store_check"],
     "android_developer": ["generate_tests", "debug_code", "app_store_check"],
     "ios_developer": ["generate_tests", "debug_code", "app_store_check"],
     "qa_engineer": ["generate_tests", "run_tests", "analyze_error"],

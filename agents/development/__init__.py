@@ -16,6 +16,7 @@ from .rust_backend import RustBackend
 from .svelte_developer import SvelteDeveloper
 from .flutter_developer import FlutterDeveloper
 from .react_native_developer import ReactNativeDeveloper
+from .mobile_ux_engineer import MobileUXEngineer
 from .android_developer import AndroidDeveloper
 from .ios_developer import IOSDeveloper
 from .php_developer import PHPDeveloper
@@ -39,6 +40,7 @@ __all__ = [
     "SvelteDeveloper",
     "FlutterDeveloper",
     "ReactNativeDeveloper",
+    "MobileUXEngineer",
     "AndroidDeveloper",
     "IOSDeveloper",
     "PHPDeveloper",
