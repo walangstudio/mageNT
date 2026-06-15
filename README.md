@@ -1,6 +1,6 @@
 # mageNT
 
-![version](https://img.shields.io/badge/version-0.8.0-blue)
+![version](https://img.shields.io/badge/version-0.9.0-blue)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
@@ -415,6 +415,7 @@ When starting any workflow or spec, mageNT will ask if you'd like to follow a **
 | `skill_generate_tests` | Test generation guidance |
 | `skill_run_tests` | Test runner guidance |
 | `skill_check_versions` | Dependency version and compatibility check |
+| `skill_app_store_check` | Auto-detect a mobile project (native, Expo, RN, Flutter, Tauri), scan it against Apple App Store / Google Play rejection rules, and report a checklist + accept/reject verdict |
 
 Skills are also auto-invoked during `run_parallel_agents` based on the arch spec content.
 
