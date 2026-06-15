@@ -1,6 +1,6 @@
 # mageNT
 
-![version](https://img.shields.io/badge/version-0.10.0-blue)
+![version](https://img.shields.io/badge/version-0.11.0-blue)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
@@ -16,7 +16,7 @@ Ever wish Claude had deep expertise in specific areas? That's what mageNT does. 
 - Building a React app? Get the React Developer
 - Designing an API? Ask the API Developer
 
-Think of it like having 46 specialists on standby — Principals, Staff, and Senior engineers picked per role, plus a team-lead coordinator — each with their own specialty. You can also run a full spec-driven development cycle — from requirements to parallel implementation to delivery audit — with a single tool call per step, or spawn a parallel team of teammates in Claude Code (v2.1.32+).
+Think of it like having 48 specialists on standby — Principals, Staff, and Senior engineers picked per role, plus a team-lead coordinator — each with their own specialty. You can also run a full spec-driven development cycle — from requirements to parallel implementation to delivery audit — with a single tool call per step, or spawn a parallel team of teammates in Claude Code (v2.1.32+).
 
 ## What's new in 0.8
 
@@ -34,7 +34,7 @@ Constraints are **tier-aware**. Telling a weak model "no `eval`" helps it; telli
 
 That ceiling is the benchmark's, not the model's. On real multi-file work even frontier models have room to spare (SWE-bench went from under 10% to over 70% in a year, all from scaffolding), and that's what magent's structure is for. In **passthrough** (the default, where the host Claude writes the code) the temperature, repair loop, and best-of-N don't even run, only the persona and declared constraints reach the model. [Full table and sources.](docs/raw-vs-magent-coding.md#which-models-the-coding-levers-help)
 
-**Which surface to install.** On a frontier model you're buying orchestration and spec structure, not faster code, so pick by how you work. On **Claude Code**, `./install.sh -c claude` gives you skills, subagents, and the MCP pipeline: skills for quick slash-command access, subagents to pull in one specialist, and the pipeline (`magent_spec → plan → tasks → implement → audit → release`) for the typed, gated, traceable flow. Add **agent teams** (`--profile teams --enable-teams`) only for big parallel work; it swaps skills for the full 46-agent roster, so flip it on per project, not by default. **Codex** is frontier too, so same saturated tier; its CLI speaks MCP, so the pipeline and `consult_*` tools work there, but subagents, skills, and teams are Claude Code only.
+**Which surface to install.** On a frontier model you're buying orchestration and spec structure, not faster code, so pick by how you work. On **Claude Code**, `./install.sh -c claude` gives you skills, subagents, and the MCP pipeline: skills for quick slash-command access, subagents to pull in one specialist, and the pipeline (`magent_spec → plan → tasks → implement → audit → release`) for the typed, gated, traceable flow. Add **agent teams** (`--profile teams --enable-teams`) only for big parallel work; it swaps skills for the full 48-agent roster, so flip it on per project, not by default. **Codex** is frontier too, so same saturated tier; its CLI speaks MCP, so the pipeline and `consult_*` tools work there, but subagents, skills, and teams are Claude Code only.
 
 ## What's new in 0.7
 
@@ -211,11 +211,11 @@ Per-agent dispatch lives in [`config/dispatch.yaml`](config/dispatch.yaml). Mark
 | `full` (default) | Both subagents AND skills per dispatch.yaml |
 | `subagents` | Only the 15 agents marked `subagent` in dispatch.yaml |
 | `skills` | Only the 4 agents marked `skill` + the 16 scaffold/test/debug/quality skills |
-| `teams` | All 46 agents as subagents (for agent-teams use) |
+| `teams` | All 48 agents as subagents (for agent-teams use) |
 
 #### What you lose by skipping MCP
 
-If you install with `--mode subagents` or `--mode skills` (no MCP), you keep all 46 subagents and the standalone scaffold/test/debug/quality skills, but you lose:
+If you install with `--mode subagents` or `--mode skills` (no MCP), you keep all 48 subagents and the standalone scaffold/test/debug/quality skills, but you lose:
 
 - The full **spec pipeline**: `magent_constitution → magent_spec → magent_clarify → magent_plan → magent_tasks → magent_implement → magent_audit → magent_release`. The `/magent-spec` etc. slash-command wrappers exist as skill files but their bodies invoke MCP tools — without MCP they're dead pointers.
 - **`run_parallel_agents`** (concurrent agent orchestration with skill-affinity auto-selection)
@@ -357,7 +357,8 @@ Consult the Security Engineer about this auth code
 | Backend | Node.js, Python, Java, Go, .NET, Rust, API, Integration specialists |
 | Infrastructure | Database Administrator (Staff), DevOps (Staff), Cloud Architect (Principal) |
 | Quality & Security | Security Engineer (Staff), Performance Engineer (Staff), SDET (Staff), QA Engineer, Automation QA, Debugging Expert |
-| Mobile | Flutter, React Native, Android (Kotlin/Java), iOS (Swift/Obj-C), Mobile Dev, Mobile UX Engineer (micro-interaction/native-feel polish) |
+| Mobile | Flutter, React Native, Expo (SDK/Router/EAS), Android (Kotlin/Java), iOS (Swift/Obj-C), Mobile Dev, Mobile UX Engineer (micro-interaction/native-feel polish) |
+| Cross-platform desktop/mobile | Tauri (Tauri 2 desktop + mobile, Rust core) |
 | Other | Technical Writer, PHP, TUI, CLI/Installer, Full-Stack Dev |
 
 ## Spec-Driven Development
