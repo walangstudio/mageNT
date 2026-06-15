@@ -54,6 +54,7 @@ class MobileDeveloper(CodeDisciplineMixin, BaseAgent):
             "Follow platform accessibility guidelines",
             "Use code signing and proper security",
             "Plan for app store review requirements",
+            "For native-feel polish — spring press states, subtle transitions, haptics, keyboard choreography, skeleton empty states, pre-onboarding permission priming — consult the mobile_ux_engineer",
         ]
 
     @property

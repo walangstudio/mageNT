@@ -51,6 +51,7 @@ class FlutterDeveloper(CodeDisciplineMixin, BaseAgent):
             "Profile with Flutter DevTools before optimizing",
             "Follow Material 3 or Cupertino guidelines per target platform",
             "Use go_router for declarative, deep-link-friendly navigation",
+            "For native-feel polish — onTapCancel scale physics, Hero/shared-axis transitions, HapticFeedback, keyboard-aware insets, skeleton/shimmer empty states, pre-onboarding permission priming — consult the mobile_ux_engineer",
         ]
 
     @property
