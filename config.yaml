@@ -72,10 +72,18 @@ agents:
     enabled: true
     expertise_level: principal
     specialization: React Native, Expo, TypeScript, React Navigation, EAS
+  expo_developer:
+    enabled: true
+    expertise_level: principal
+    specialization: Expo SDK, Expo Router, EAS Build/Submit/Update, config plugins, Expo Modules API
   mobile_ux_engineer:
     enabled: true
     expertise_level: principal
     specialization: Micro-interactions, spring press states, haptics, keyboard UX, empty states, permission priming
+  tauri_developer:
+    enabled: true
+    expertise_level: principal
+    specialization: Tauri 2 desktop + mobile, Rust commands, capabilities/permissions, plugins, updater, bundling/signing
   android_developer:
     enabled: true
     expertise_level: principal

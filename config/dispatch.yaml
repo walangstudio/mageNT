@@ -125,6 +125,7 @@ agents:
   api_developer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   cli_installer_developer:  {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   dotnet_backend:           {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  expo_developer:           {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   flutter_developer:        {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   fullstack_developer:      {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   go_backend:               {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
@@ -142,6 +143,7 @@ agents:
   react_native_developer:   {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   rust_backend:             {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   svelte_developer:         {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
+  tauri_developer:          {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   tui_developer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   vue_developer:            {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}
   refactoring_specialist:   {mode: mcp_only, tools: [Read, Grep, Glob, Bash, Edit, Write]}

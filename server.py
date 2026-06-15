@@ -65,7 +65,9 @@ from agents.development.rust_backend import RustBackend
 from agents.development.svelte_developer import SvelteDeveloper
 from agents.development.flutter_developer import FlutterDeveloper
 from agents.development.react_native_developer import ReactNativeDeveloper
+from agents.development.expo_developer import ExpoDeveloper
 from agents.development.mobile_ux_engineer import MobileUXEngineer
+from agents.development.tauri_developer import TauriDeveloper
 from agents.development.android_developer import AndroidDeveloper
 from agents.development.ios_developer import IOSDeveloper
 from agents.development.php_developer import PHPDeveloper
@@ -124,7 +126,9 @@ AGENT_CLASSES = {
     "svelte_developer": SvelteDeveloper,
     "flutter_developer": FlutterDeveloper,
     "react_native_developer": ReactNativeDeveloper,
+    "expo_developer": ExpoDeveloper,
     "mobile_ux_engineer": MobileUXEngineer,
+    "tauri_developer": TauriDeveloper,
     "android_developer": AndroidDeveloper,
     "ios_developer": IOSDeveloper,
     "php_developer": PHPDeveloper,

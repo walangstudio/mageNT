@@ -51,6 +51,17 @@ class FlutterDeveloper(CodeDisciplineMixin, BaseAgent):
             "Profile with Flutter DevTools before optimizing",
             "Follow Material 3 or Cupertino guidelines per target platform",
             "Use go_router for declarative, deep-link-friendly navigation",
+            "Default Riverpod to code generation: @riverpod Notifier/AsyncNotifier with riverpod_generator + build_runner, plus riverpod_lint on custom_lint",
+            "Model unions/state with Dart 3 sealed classes + pattern matching; reach for Freezed v3 only for data classes needing copyWith/equality, with json_serializable for (de)serialization",
+            "Use Dart 3 records for multi-return and switch expressions for exhaustive state rendering (sealed-class exhaustiveness flags missing cases at compile time)",
+            "Apply class modifiers deliberately — final / base / interface / sealed encode API intent",
+            "Use go_router_builder typed routes and StatefulShellRoute.indexedStack for tab state; auth via redirect + refreshListenable, deep links via app_links",
+            "Prefer type-safe native interop: Pigeon for platform-channel APIs, FFIgen (C/Obj-C/Swift) and JNIgen (Java/Kotlin) over hand-written method channels",
+            "Test native interactions with patrol (drives OS permission dialogs) on integration_test; golden-test design primitives with alchemist; prefer mocktail (no codegen) over mockito",
+            "Structure monorepos on Pub Workspaces (resolution: workspace, shared lockfile) with melos v7 layered on top for script orchestration",
+            "Impeller is the default renderer (Skia removed on modern Android, none on iOS); its build-time shader precompilation has largely killed first-run shader jank — wrap expensive subtrees in RepaintBoundary and keep stable Keys on dynamic lists",
+            "For OTA, Shorebird code push patches Dart code only (version-locked, no native/plugin/asset changes); for CI use Codemagic or fastlane",
+            "Build Flutter web with --wasm to enable WasmGC (skwasm) with CanvasKit fallback; design adaptive layouts (LayoutBuilder/MediaQuery breakpoints, NavigationRail vs BottomNavigationBar) now that desktop is mature",
             "For native-feel polish — onTapCancel scale physics, Hero/shared-axis transitions, HapticFeedback, keyboard-aware insets, skeleton/shimmer empty states, pre-onboarding permission priming — consult the mobile_ux_engineer",
         ]
 

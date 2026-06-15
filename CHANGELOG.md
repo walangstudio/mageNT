@@ -6,6 +6,35 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.11.0] - 2026-06-15
+
+### Added
+
+- **Two framework specialist agents (48 total) + a deepened Flutter agent.**
+  - **`expo_developer`** — Expo specialist distinct from bare React Native:
+    SDK-version thinking (`npx expo install`), Expo Router (file/typed/API
+    routes), the EAS pipeline (Build/Submit/Update/Workflows) and the
+    OTA-vs-native runtime-version boundary, Continuous Native Generation via
+    config plugins (never hand-edit `ios/`/`android/`), the Expo Modules API,
+    and the Expo Go → dev-build cutover.
+  - **`tauri_developer`** — Tauri 2 desktop **and** mobile: Rust core over the
+    OS-native WebView (no Chromium), `#[tauri::command]` IPC + managed state +
+    channels, the capabilities/permissions ACL security model (replacing v1's
+    allowlist), the `tauri-plugin-*` ecosystem, minisign-signed updater,
+    per-platform bundling/signing, and `tauri ios/android init` mobile targets.
+  - **`flutter_developer`** deepened with modern practice: Riverpod codegen
+    (`@riverpod`), Dart 3 records/patterns/sealed/class-modifiers, Freezed v3,
+    Pigeon/FFIgen/JNIgen interop, patrol/alchemist/mocktail testing, Pub
+    Workspaces + melos, Shorebird OTA, Impeller-default rendering, and `--wasm`
+    web.
+  - Both new agents are consultable (`consult_expo_developer`,
+    `consult_tauri_developer`) and registered across `server.py`, `config.yaml`,
+    `config.example.yaml`, `config/dispatch.yaml`, and `utils/skill_registry.py`
+    (app_store_check affinity). (`agents/development/expo_developer.py`,
+    `agents/development/tauri_developer.py`, `tests/test_framework_agents.py`.)
+
+---
+
 ## [0.10.0] - 2026-06-15
 
 ### Added
