@@ -58,6 +58,7 @@ class IOSDeveloper(CodeDisciplineMixin, BaseAgent):
             "Set ITSAppUsesNonExemptEncryption in Info.plist (false for HTTPS-only apps) so the build doesn't stall on the export-compliance prompt",
             "Any app with account creation must offer in-app account deletion; if you offer third-party/social login, also offer Sign in with Apple (Guidelines 5.1.1(v), 4.8)",
             "Build with a currently-accepted SDK floor (iOS 18 SDK / Xcode 16 now; iOS 26 SDK from 2026-04-28) — older SDK uploads are rejected",
+            "For native-feel polish — isPressed scaleEffect spring buttons, .navigationTransition(.zoom) (iOS 18), .sensoryFeedback haptics, .scrollDismissesKeyboard(.interactive), .redacted skeletons, pre-onboarding permission priming — consult the mobile_ux_engineer",
         ]
 
     @property

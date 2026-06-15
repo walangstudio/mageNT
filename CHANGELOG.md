@@ -6,6 +6,24 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.10.0] - 2026-06-15
+
+### Added
+
+- **`mobile_ux_engineer` — a 46th agent for the mobile polish layer.** The
+  specialist that makes an app feel native: spring-physics press states that
+  cancel on scroll (`pressto`), subtle Reanimated/`moti` transitions and iOS-18
+  zoom (`Link.AppleZoom`), tactile haptics (`expo-haptics`), frame-by-frame
+  keyboard choreography (`react-native-keyboard-controller`), skeleton empty
+  states, and pre-onboarding permission priming — with Flutter / SwiftUI /
+  Jetpack Compose parity for each. Consultable via `consult_mobile_ux_engineer`.
+  The five existing mobile agents (react_native, flutter, ios, android, mobile)
+  now each point to it for the polish pass. (`agents/development/mobile_ux_engineer.py`,
+  `server.py`, `config.yaml`, `config/dispatch.yaml`, `utils/skill_registry.py`,
+  `tests/test_mobile_ux_engineer.py`.)
+
+---
+
 ## [0.9.0] - 2026-06-15
 
 ### Added

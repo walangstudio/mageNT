@@ -55,6 +55,7 @@ class ReactNativeDeveloper(CodeDisciplineMixin, BaseAgent):
             "Wrap third-party native modules with a JS abstraction layer",
             "Test on real iOS and Android devices before releasing",
             "Handle deep linking and universal links from the start",
+            "For native-feel polish — spring press states (pressto), subtle Reanimated/moti transitions, expo-haptics, react-native-keyboard-controller, skeleton empty states, pre-onboarding permission priming — consult the mobile_ux_engineer",
         ]
 
     @property
