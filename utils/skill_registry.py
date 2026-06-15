@@ -76,7 +76,7 @@ TECH_KEYWORDS: Dict[str, List[str]] = {
     "format": ["format", "formatter", "prettier", "black", "gofmt", "rustfmt"],
     "mutation_test": ["mutation", "mutmut", "stryker", "mutation score", "test effectiveness"],
     "dependency_audit": ["vulnerability", "cve", "audit", "supply chain", "advisory"],
-    "app_store_check": ["app store", "play store", "ios app", "android app", "submission", "testflight", "info.plist", "androidmanifest", "expo", "react native"],
+    "app_store_check": ["app store", "play store", "google play", "ios app", "android app", "submission", "testflight", "info.plist", "androidmanifest", "expo", "react native", "flutter", "tauri", "capacitor", "app review", "guideline", "account deletion", "data safety", "privacy manifest"],
 }
 
 

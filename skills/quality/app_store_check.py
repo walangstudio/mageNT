@@ -1,132 +1,108 @@
 """App store submission validation skill.
 
-Static-analysis checklist that flags Apple App Store and Google Play rejection
-rules before submission, so a build doesn't bounce on review. Guidance-only:
-emits the detectors (file + pattern + what to flag) for the host to run via
-Grep/Read; it does not mutate files.
+Detects the mobile framework (native iOS/Android, Expo, React Native, Flutter,
+Tauri, Capacitor/Cordova), runs static detectors for the mechanically-checkable
+Apple App Store and Google Play rejection rules (file:line evidence), emits an
+accept/reject verdict (GO / GO-WITH-CONDITIONS / LIKELY-REJECT), then appends a
+reviewer-judgment checklist covering the full Apple guidelines (5 sections) and
+Google Play policy categories. The static scan lives in ``_mobile.py``; this
+file owns the manual checklists and the skill surface.
+
+Run it inside a mobile project root (``project_path`` defaults to the current
+directory); ``platform`` auto-derives from the detected framework.
 
 Sources (verify against canonical pages at use time — Apple's reason-code page
-is JS-rendered and reason codes are corroborated via secondary sources):
-- Apple App Store Review Guidelines (5.1.1 privacy / account deletion, 4.8 SIWA)
+is JS-rendered):
+- Apple App Store Review Guidelines (developer.apple.com/app-store/review/guidelines)
 - developer.apple.com: Info.plist usage keys, required-reason API + privacy
-  manifest docs, upcoming SDK minimum requirements, encryption export compliance
-- Google Play: target API level requirement; Android 12 exported / Android 14
-  foreground-service-type behavior changes; sensitive-permission policy pages;
-  16 KB page-size guide
+  manifest docs, SDK minimums, encryption export compliance
+- Google Play Developer Program Policies / policy center: target API level,
+  Android 12 exported / Android 14 foreground-service-type changes, sensitive
+  permissions, Data safety, account/data deletion, Play Billing, 16 KB pages
 """
 
+from pathlib import Path
 from typing import Any, Dict, List
 
 try:
     from skills.base import BaseSkill
-except ImportError:
+    from skills.quality._mobile import (
+        detect_mobile_project, run_checks, verdict, render_report,
+    )
+except ImportError:  # package-relative fallback
     from ..base import BaseSkill
+    from ._mobile import (
+        detect_mobile_project, run_checks, verdict, render_report,
+    )
 
 
-_IOS_GUIDANCE = """## Apple App Store — static rejection checks
+_IOS_GUIDANCE = """## Apple App Store Review Guidelines — pre-submission checklist
 
-Input surfaces: `*.swift` / `*.m` / `*.mm`, `Info.plist`, `*.xcprivacy`,
-`*.xcodeproj` / `project.pbxproj`, linked `.framework` / `.a`.
+Surfaces: `Info.plist`, `*.xcprivacy`, `project.pbxproj`, `*.swift`/`*.m`, and
+App Store Connect metadata. The automated findings above cover the mechanical
+rules; the items below are reviewer-judgment calls — confirm each before you
+submit (check `file:line` evidence where relevant).
 
-### HARD (automated / guaranteed rejection)
+### 1. Safety
+- [ ] 1.1 No objectionable/defamatory/violent/sexual content.
+- [ ] 1.2 User-generated content has filtering, in-app reporting, user blocking, and a published contact.
+- [ ] 1.4 Health/medical claims are substantiated; no encouragement of physical harm.
+- [ ] 1.5 An easy way to contact the developer exists in the app or metadata.
 
-**1. Info.plist purpose strings (ITMS-90683).** A privacy-guarded API linked
-without its `*UsageDescription` key (or with an empty/placeholder value) is an
-automatic upload reject. Grep source for each symbol; assert the key exists in
-`Info.plist`, is non-empty, and is not literally the key name.
+### 2. Performance
+- [ ] 2.1 App is complete: no crashes on a real device, no broken links, no placeholder text/content.
+- [ ] 2.1 A working demo account (or demo mode) is in Review Notes when login is required; the backend is live during review.
+- [ ] 2.3 Metadata accurate: screenshots show the app in use (not just splash/login); description matches behavior.
+- [ ] 2.3.2 In-app purchases are disclosed in the description/screenshots.
+- [ ] 2.5.1 Only public APIs; runs on a current iOS; no deprecated/private API.
 
-| Symbol / usage | Required Info.plist key |
-|---|---|
-| `AVCaptureDevice`, camera `UIImagePickerController` | `NSCameraUsageDescription` |
-| `AVAudioSession` record, audio capture | `NSMicrophoneUsageDescription` |
-| `CLLocationManager` whenInUse | `NSLocationWhenInUseUsageDescription` |
-| `requestAlwaysAuthorization` / background loc | `NSLocationAlwaysAndWhenInUseUsageDescription` (+ WhenInUse) |
-| `PHPhotoLibrary`, `PHPickerViewController` | `NSPhotoLibraryUsageDescription` / `NSPhotoLibraryAddUsageDescription` |
-| `CNContactStore` | `NSContactsUsageDescription` |
-| `EKEventStore` | `NSCalendarsUsageDescription` (iOS 17+: `NSCalendarsFullAccessUsageDescription`) |
-| `CMMotionManager`, `CMPedometer` | `NSMotionUsageDescription` |
-| `CBCentralManager` | `NSBluetoothAlwaysUsageDescription` |
-| `LAContext` (Face ID) | `NSFaceIDUsageDescription` |
-| `SFSpeechRecognizer` | `NSSpeechRecognitionUsageDescription` |
-| `ATTrackingManager.requestTrackingAuthorization` | `NSUserTrackingUsageDescription` |
-| `HKHealthStore` | `NSHealthShareUsageDescription` / `NSHealthUpdateUsageDescription` |
-| Bonjour / `NWBrowser` local network | `NSLocalNetworkUsageDescription` |
+### 3. Business
+- [ ] 3.1.1 Digital goods/subscriptions sell through StoreKit in-app purchase only — not a custom payment SDK.
+- [ ] 3.1.1(a) Any external-purchase link uses the correct entitlement for its storefront.
+- [ ] 3.1.2 Subscriptions deliver ongoing value, are ≥ 7-day, and state terms clearly before purchase.
 
-**2. Privacy manifest required-reason APIs (ITMS-91053/91055/91061).** If any
-trigger symbol appears in first-party source, require a matching
-`NSPrivacyAccessedAPITypes` category in `PrivacyInfo.xcprivacy` with at least one
-valid reason code. Bundled SDKs on Apple's named list must each carry their own
-`.xcprivacy`. If `NSPrivacyTracking` is true, `NSPrivacyTrackingDomains` must be
-non-empty.
+### 4. Design
+- [ ] 4.2 Minimum functionality: app-like, useful/unique — not a repackaged website or link collection.
+- [ ] 4.3 Not a spam/copycat duplicate of an existing app.
+- [ ] 4.8 If third-party/social login is the primary sign-in, offer a privacy-equivalent option (Sign in with Apple or equivalent: name/email-only, hide-my-email, no ad tracking without consent).
 
-| Category | Trigger symbols | Example valid reason codes |
-|---|---|---|
-| `...FileTimestamp` | `stat`, `fstat`, `.modificationDate`, `getattrlist` | `DDA9.1`, `C617.1`, `3B52.1`, `0A2A.1` |
-| `...SystemBootTime` | `systemUptime`, `mach_absolute_time`, `KERN_BOOTTIME` | `35F9.1`, `8FFB.1` |
-| `...DiskSpace` | `statfs`, `statvfs`, `volumeAvailableCapacity` | `85F4.1`, `E174.1`, `7D9E.1`, `B728.1` |
-| `...ActiveKeyboard` | `activeInputModes` | `3EC4.1`, `54BD.1` |
-| `...UserDefaults` | `UserDefaults`, `NSUserDefaults` | `CA92.1`, `1C8F.1`, `C56D.1`, `AC6B.1` |
-
-**3. SDK / Xcode floor (date-gated).** Parse `DTSDKName` / `DTXcode`; flag below
-the active floor (iOS 18 SDK / Xcode 16 now; iOS 26 SDK from 2026-04-28).
-
-### SOFT (reviewer discretion / build stall — flag with evidence)
-
-- `ITSAppUsesNonExemptEncryption` absent → build stalls on the manual prompt.
-  Set `false` for HTTPS-only apps. If a non-exempt crypto lib (OpenSSL,
-  libsodium, custom cipher) is linked and the key is `false`, flag as likely
-  misdeclared.
-- `NSAllowsArbitraryLoads = true` under `NSAppTransportSecurity` → justify or
-  scope via `NSExceptionDomains`.
-- Account deletion (Guideline 5.1.1(v)): if source has signup/account-creation
-  flows but no delete-account route/string/API call, flag for manual confirm.
-- Sign in with Apple (Guideline 4.8): if a social-login SDK (`GoogleSignIn`,
-  `FBSDKLoginKit`) is linked and `ASAuthorizationAppleIDProvider` is absent,
-  flag (exemptions exist).
-- Private-API usage (ITMS-90338): scan for underscore-prefixed Apple SDK
-  selectors; evidence-only, high false-positive risk.
+### 5. Legal
+- [ ] 5.1.1(i) Privacy policy linked in metadata AND in-app; names data collected, use, retention, and third-party sharing.
+- [ ] 5.1.1(ii) Each permission purpose string clearly describes the use; consent is withdrawable.
+- [ ] 5.1.1(v) If the app has accounts, in-app account deletion is available.
+- [ ] 5.1.2 App Tracking Transparency prompt precedes any cross-app/website tracking.
+- [ ] 5.1.5 Location is used only when relevant, with consent.
+- [ ] 5.2 All content/IP is owned or properly licensed.
 """
 
-_ANDROID_GUIDANCE = """## Google Play — static rejection checks
+_ANDROID_GUIDANCE = """## Google Play Developer Program Policies — pre-submission checklist
 
-Input surfaces: `AndroidManifest.xml`, `build.gradle(.kts)`, `jniLibs/` + `.so`
-(ELF `p_align`), dependency graph.
+Surfaces: `AndroidManifest.xml`, `build.gradle(.kts)`, and the Play Console
+(Data safety, declarations, app content). The automated findings above cover the
+mechanical rules; confirm the judgment calls below.
 
-### HARD
+### Privacy, Deception & Device Abuse / User Data
+- [ ] Privacy policy linked in the store listing AND in-app.
+- [ ] Data safety form matches what the app (and its SDKs) actually collects/shares.
+- [ ] Sensitive permissions (background location, `QUERY_ALL_PACKAGES`, all-files-access, SMS/Call Log) are justified via the Console declaration, or removed/scoped.
+- [ ] Account deletion: an in-app route AND a web data-deletion URL in the Console.
+- [ ] targetSdkVersion meets the current Play floor; foreground services declare a type.
 
-**1. `android:exported` explicit (API 31+).** Every `<activity>` /`<service>` /
-`<receiver>` with a child `<intent-filter>` must set `android:exported`
-explicitly, or the build/install fails. Parse the manifest; flag any such
-component missing it.
+### Monetization & Ads
+- [ ] Digital goods/subscriptions use Google Play Billing (physical goods/services excepted).
+- [ ] Ads are non-disruptive: no unexpected full-screen interstitials, ads are clearly labeled, and they respect the content rating / Families rules.
 
-**2. targetSdkVersion floor.** Parse `targetSdk` from `build.gradle(.kts)`
-(preferred) or manifest. Flag `< 35` for new submissions/updates (required
-since 2025-08-31); `< 34` is hard-unavailable to new users.
+### Store Listing & Promotion
+- [ ] Title/description/screenshots are accurate — no misleading claims or keyword stuffing.
 
-**3. Foreground service types (API 34+).** For each foreground `<service>`,
-require `android:foregroundServiceType`; for each declared type, require the
-matching `FOREGROUND_SERVICE_<TYPE>` `uses-permission` plus base
-`FOREGROUND_SERVICE`. The type must also be declared in Play Console.
+### Spam, Functionality & UX
+- [ ] App is fully functional with no crashes/broken flows; not a thin web wrapper or copycat.
 
-**4. Sensitive permissions needing a Console declaration** (manifest presence
-without an approved declaration → removal). Flag each:
-`ACCESS_BACKGROUND_LOCATION`, `QUERY_ALL_PACKAGES` (prefer scoped `<queries>`),
-`MANAGE_EXTERNAL_STORAGE`, `SEND_SMS`/`READ_SMS`/`READ_CALL_LOG`/etc. (default
-SMS/Phone handlers only), `com.google.android.gms.permission.AD_ID`.
+### Families (if the app targets children)
+- [ ] Designed for Families compliant: no disallowed ads/SDKs, correct content rating, parental controls.
 
-**5. 16 KB native page alignment (since 2025-11-01).** If the project ships
-native `.so` (`jniLibs/`, `externalNativeBuild`, NDK), require AGP >= 8.5.1 and
-16384-aligned ELF load segments (`p_align`). Pure Kotlin/Java is auto-compliant.
-
-### SOFT
-
-- AAB + Play App Signing: flag APK-only release packaging (won't pass upload).
-- Privacy policy URL: if any sensitive permission / data-collecting SDK is
-  present, require a policy URL somewhere in the project; Console field can't be
-  checked statically.
-- Data safety alignment: map data-collecting permissions/SDKs (location,
-  contacts, camera, AD_ID/ads) to expected Data safety categories and emit a
-  "verify these are declared in Console" checklist.
+### Intellectual Property / Impersonation
+- [ ] No unauthorized brands/IP; the app does not impersonate another app or developer.
 """
 
 
@@ -144,8 +120,9 @@ class AppStoreCheck(BaseSkill):
     @property
     def description(self) -> str:
         return (
-            "Static-analysis checklist that flags Apple App Store and Google "
-            "Play rejection rules before submission"
+            "Auto-detect a mobile project (native, Expo, React Native, Flutter, "
+            "Tauri), scan it for Apple App Store / Google Play rejection rules, "
+            "and report a checklist + accept/reject verdict"
         )
 
     @property
@@ -160,24 +137,25 @@ class AppStoreCheck(BaseSkill):
     def when_to_activate(self) -> List[str]:
         return [
             "Before submitting an iOS or Android build to the App Store / Play",
+            "While inside a mobile project — run it to see the pass/fail checklist + verdict",
             "Adding a permission-guarded API (camera, location, contacts, tracking)",
             "Bumping target SDK, adding a foreground service, or shipping native libs",
-            "Auditing an Expo/React Native/Flutter app's produced native projects",
+            "Auditing an Expo/React Native/Flutter/Tauri app before release",
         ]
 
     @property
     def parameters(self) -> List[Dict[str, Any]]:
         return [
             {
-                "name": "platform",
+                "name": "project_path",
                 "type": "string",
-                "description": "ios | android | both (default both)",
+                "description": "Mobile project root to scan (default: current directory)",
                 "required": False,
             },
             {
-                "name": "project_path",
+                "name": "platform",
                 "type": "string",
-                "description": "Path to the mobile project root to scan",
+                "description": "ios | android | both | auto (default auto — derived from the detected framework)",
                 "required": False,
             },
         ]
@@ -185,44 +163,49 @@ class AppStoreCheck(BaseSkill):
     @property
     def workflow(self) -> List[str]:
         return [
-            "Locate the platform manifests (Info.plist / *.xcprivacy / project.pbxproj; AndroidManifest.xml / build.gradle).",
-            "Run each detector below with Grep/Read against source and config.",
-            "Report findings grouped HARD vs SOFT, each with file:line evidence.",
-            "For Expo/RN/Flutter, scan the produced native dirs (ios/, android/) after prebuild, not just app.json.",
+            "Run against the project root (pass project_path = the current directory).",
+            "Read the detected framework + automated findings table; fix every ❌ HARD finding.",
+            "Resolve the verdict: any ❌ = LIKELY-REJECT; ⚠️/❓ = GO-WITH-CONDITIONS.",
+            "Walk the manual checklist for reviewer-judgment items (Apple 5 sections / Play policies).",
+            "For Expo/RN/Flutter/Tauri, generate native projects (prebuild/build) first so Info.plist & privacy-manifest checks have something to read.",
         ]
 
     def execute(self, **kwargs) -> Dict[str, Any]:
-        platform = str(kwargs.get("platform", "both") or "both").lower()
-        if platform not in ("ios", "android", "both"):
-            platform = "both"
-        project_path = kwargs.get("project_path", "")
+        raw_platform = str(kwargs.get("platform") or "auto").lower()
+        if raw_platform not in ("ios", "android", "both", "auto"):
+            raw_platform = "auto"
+        project_path = str(kwargs.get("project_path") or ".")
+        root = Path(project_path).resolve()
 
-        sections = ["# App Store Submission Validation"]
-        if project_path:
-            sections.append(f"\nProject: `{project_path}`")
-        sections.append(
-            "\nRun the detectors below. HARD = automated/guaranteed rejection; "
-            "fix before submitting. SOFT = reviewer discretion or upload stall; "
-            "flag with evidence. Cite `file:line` for every finding."
-        )
+        project = detect_mobile_project(root)
 
-        if platform in ("ios", "both"):
-            sections.append("\n" + _IOS_GUIDANCE)
-        if platform in ("android", "both"):
-            sections.append("\n" + _ANDROID_GUIDANCE)
+        if raw_platform == "auto":
+            platforms = list(project.stores) or ["ios", "android"]
+        elif raw_platform == "both":
+            platforms = ["ios", "android"]
+        else:
+            platforms = [raw_platform]
 
-        sections.append(
-            "\n## Output\n"
-            "For each finding: `[HARD|SOFT] <rule> — <file:line> — <fix>`. "
-            "End with a go/no-go: any unresolved HARD finding = NO-GO."
-        )
+        findings = run_checks(project, platforms)
+        decision = verdict(findings)
+        report = render_report(project, findings, decision)
+
+        sections = [report, "---", "## Manual checklist (reviewer-judgment items)", ""]
+        if "ios" in platforms:
+            sections.append(_IOS_GUIDANCE)
+        if "android" in platforms:
+            sections.append(_ANDROID_GUIDANCE)
 
         guidance = "\n".join(sections)
         return {
             "guidance": guidance,
             "context": {
-                "platform": platform,
-                "project_path": project_path,
+                "platform": raw_platform,
+                "platforms": platforms,
+                "project_path": str(root),
+                "framework": project.frameworks,
+                "verdict": decision,
+                "findings": [f.__dict__ for f in findings],
             },
-            "success": True,
+            "success": decision != "LIKELY-REJECT",
         }

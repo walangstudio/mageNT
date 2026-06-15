@@ -6,6 +6,38 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.0] - 2026-06-15
+
+### Added
+
+- **`app_store_check` is now a real cross-platform store-review validator.** It
+  was a static two-block guidance dump (iOS/Android technical rules only, no
+  project detection). It now **detects the framework** — native iOS/Android,
+  Expo, React Native, Flutter, Tauri (incl. Tauri 2 mobile `gen/apple`,
+  `gen/android`), and Capacitor/Cordova — resolves the real manifest surfaces,
+  and **runs static detectors** that emit `file:line` evidence and an
+  accept/reject **verdict** (`GO` / `GO-WITH-CONDITIONS` / `LIKELY-REJECT`).
+  Deterministic checks drive the verdict (empty/placeholder Info.plist purpose
+  string, missing `android:exported` on an intent-filter component, `targetSdk`
+  below the Play floor); heuristic checks (capability used without its purpose
+  key, missing privacy policy / account deletion, third-party payment SDK for
+  digital goods, Sign in with Apple, ads, sensitive Android permissions) surface
+  as non-fatal warnings. The report then appends a manual checklist covering the
+  **full Apple App Store Review Guidelines** (Safety / Performance / Business /
+  Design / Legal) and the **Google Play policy categories**. Run it inside a
+  project root — `project_path` defaults to the current directory and `platform`
+  auto-derives from the detected framework.
+  (`skills/quality/app_store_check.py`, new `skills/quality/_mobile.py`,
+  `tests/test_app_store_check.py`, `utils/skill_registry.py`.)
+
+### Security
+
+- `_mobile.py` parses `AndroidManifest.xml` with a DTD/entity guard (refuses any
+  `<!DOCTYPE`/`<!ENTITY`), neutralizing XXE / billion-laughs without adding a
+  dependency.
+
+---
+
 ## [0.8.0] - 2026-06-05
 
 ### Added
