@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "magent": {
+      "command": "magent-server",
+      "args": [],
+      "env": {}
+    }
+  }
+}
