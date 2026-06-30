@@ -111,6 +111,21 @@ Then just restart your client and try:
 List the available agents
 ```
 
+### Install as a Claude Code plugin (marketplace)
+
+Claude Code users can install mageNT from the Walang Studio marketplace instead of running the installer:
+
+```
+/plugin marketplace add walangstudio/marketplace
+/plugin install magent@walangstudio
+```
+
+The plugin ships the MCP server entry. It still needs the `magent` package installed (the plugin cannot bundle a Python environment), so clone the repo and install once:
+
+```
+pip install -e .
+```
+
 ## Supported MCP Clients
 
 | Client | `-c TYPE` | Config written | Notes |

@@ -32,6 +32,7 @@ all = ["anthropic>=0.40", "openai>=1.0", "httpx", "certifi", "requests"]
 
 [project.scripts]
 magent = "magent_cli.__main__:main"
+magent-server = "magent_cli._server_main:main"
 
 [project.urls]
 Repository = "https://github.com/walangstudio/mageNT"
