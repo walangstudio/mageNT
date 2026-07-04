@@ -509,8 +509,20 @@ class MageNTServer:
                     },
                 ),
                 Tool(
+                    name="magent_design",
+                    description="Phase 7 (optional; UI-facing projects). Produce a DesignPack: JN-### user journeys, SC-### screen inventory with states, and role permissions — all cross-referenced to FR-IDs. Drivers: ui_ux_designer + business_analyst (merged by ui_ux_designer). Gate: spec exists AND has zero open clarifications. Headless projects (CLI/API) skip this phase.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "spec_id": {"type": "string"},
+                            "design_brief": {"type": "string", "description": "Optional UX constraints or platform notes."},
+                        },
+                        "required": ["spec_id"],
+                    },
+                ),
+                Tool(
                     name="magent_plan",
-                    description="Phase 7. Produce an ImplementationPlan from architect + DBA + cloud_architect (parallel, merged by system_architect). Gate: spec validates AND has zero open clarifications.",
+                    description="Phase 7. Produce an ImplementationPlan from architect + DBA + cloud_architect + security_engineer (parallel, merged by system_architect) — including ADRs (immutable; supersede, never rewrite) and a STRIDE threat model. Consumes the DesignPack as context when present. Emits Mermaid container + ERD diagrams under specs/<id>/diagrams/. Gate: spec validates AND has zero open clarifications.",
                     inputSchema={
                         "type": "object",
                         "properties": {"spec_id": {"type": "string"}},
@@ -555,7 +567,7 @@ class MageNTServer:
                 ),
                 Tool(
                     name="magent_audit",
-                    description="Phase 7. Multi-reviewer audit: delivery_manager + security_engineer + performance_engineer + qa_engineer + code_reviewer (parallel) merged into a single Audit schema with phase status + reviewer findings + recommendation.",
+                    description="Phase 7. Multi-reviewer audit: delivery_manager + security_engineer + performance_engineer + qa_engineer + code_reviewer (+ accessibility_specialist when a DesignPack exists) merged into a single Audit schema with phase status + reviewer findings + recommendation.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -593,6 +605,15 @@ class MageNTServer:
                 Tool(
                     name="magent_validate",
                     description="Phase 7. Run the spec validator over an entire spec directory: schema-checks every artifact, cross-refs FR-IDs, confirms failing_test_path files exist, and rejects unresolved clarifications.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {"spec_id": {"type": "string"}},
+                        "required": ["spec_id"],
+                    },
+                ),
+                Tool(
+                    name="magent_trace",
+                    description="Phase 7. Deterministic requirement coverage matrix (no LLM): for every FR, which journeys, screens, components, endpoints, tasks, tests, and commits cover it — plus the gap list ('FR-007 has no test'). Persists traceability.json and refreshes Mermaid diagrams. Run anytime after magent_spec.",
                     inputSchema={
                         "type": "object",
                         "properties": {"spec_id": {"type": "string"}},
@@ -1457,6 +1478,7 @@ class MageNTServer:
                     Audit, ReviewerFinding, SpecDelta,
                 )
                 try:
+                    extra_body = {}  # handler-specific additions to the response
                     if name == "magent_validate":
                         from tools.validate_spec import validate_spec_dir
                         spec_id = arguments["spec_id"]
@@ -1470,6 +1492,30 @@ class MageNTServer:
                             "errors": report.errors,
                         }
                         return [TextContent(type="text", text=json.dumps(body, indent=2))]
+
+                    if name == "magent_trace":
+                        from tools.trace_matrix import build_trace_report
+                        spec_id = arguments["spec_id"]
+                        spec_dir = self.spec_store._spec_dir(spec_id)
+                        try:
+                            trace_report = build_trace_report(spec_dir)
+                        except ValueError as e:
+                            return [TextContent(type="text", text=json.dumps(
+                                {"ok": False, "phase_gate": str(e)}, indent=2))]
+                        (spec_dir / "traceability.json").write_text(
+                            json.dumps(trace_report, indent=2), encoding="utf-8")
+                        plan = self.spec_store.load_artifact(spec_id, "plan")
+                        if plan is not None:
+                            # Diagrams are derived artifacts — a render failure
+                            # never fails the trace, but is reported, not hidden.
+                            try:
+                                from utils.mermaid_render import write_diagrams
+                                trace_report["diagrams"] = [
+                                    str(p) for p in write_diagrams(spec_dir, plan)]
+                            except Exception as e:
+                                trace_report["diagram_warning"] = (
+                                    f"diagram rendering failed: {e}")
+                        return [TextContent(type="text", text=json.dumps(trace_report, indent=2))]
 
                     if name == "magent_team_synthesize":
                         from utils.spec_pipeline import run_team_synthesize
@@ -1599,27 +1645,95 @@ class MageNTServer:
                         })
                         self.spec_store.save_artifact(spec_id, "feature_spec", cleaned)
 
+                    elif name == "magent_design":
+                        spec_id = arguments["spec_id"]
+                        spec = require_artifact(self.spec_store, spec_id, "feature_spec")
+                        require_resolved_clarifications(spec)
+                        brief = arguments.get("design_brief") or ""
+                        result = run_multi_agent_phase(
+                            spec_store=self.spec_store, spec_id=spec_id,
+                            kind="design",
+                            agent_names=["ui_ux_designer", "business_analyst"],
+                            merger_agent="ui_ux_designer",
+                            user_intent=(
+                                "Produce a DesignPack covering every user-facing requirement: "
+                                "journeys (JN-### id, title, role, fr_ids, ordered steps), "
+                                "screens (SC-### id, name, purpose, states — include at least "
+                                "default, empty, and error states where they apply — fr_ids, "
+                                "journey_ids), and role_permissions (role, can, fr_ids). "
+                                "Every journey and screen MUST reference real FR-IDs from the "
+                                "spec; every FR a user can observe belongs to at least one "
+                                "journey."
+                                + (f"\n\nDesign brief: {brief}" if brief else "")
+                            ),
+                            context_artifacts={"feature_spec": spec},
+                            agent_registry=self.agent_registry,
+                        )
+
                     elif name == "magent_plan":
                         spec_id = arguments["spec_id"]
                         spec = require_artifact(self.spec_store, spec_id, "feature_spec")
                         require_resolved_clarifications(spec)
                         const = require_artifact(self.spec_store, spec_id, "constitution")
+                        plan_ctx = {"constitution": const, "feature_spec": spec}
+                        try:
+                            design = self.spec_store.load_artifact(spec_id, "design")
+                        except Exception as e:
+                            raise GateError(
+                                f"design.json exists but is invalid: {e}. "
+                                f"Re-run magent_design or fix/delete the file.")
+                        if design is not None:
+                            plan_ctx["design"] = design
+                        spec_fr_ids = {r.id for r in spec.requirements}
+
+                        def _plan_covers_all_frs(plan_model):
+                            owned = set()
+                            for c in plan_model.components:
+                                owned.update(c.owns_fr_ids)
+                            uncovered = sorted(spec_fr_ids - owned)
+                            if uncovered:
+                                return (
+                                    f"components leave FR-IDs unowned: {uncovered}. "
+                                    f"Every spec FR must appear in some component's "
+                                    f"owns_fr_ids.")
+                            return None
+
                         result = run_multi_agent_phase(
                             spec_store=self.spec_store, spec_id=spec_id,
                             kind="plan",
                             agent_names=[
                                 "system_architect", "database_administrator", "cloud_architect",
+                                "security_engineer",
                             ],
                             merger_agent="system_architect",
                             user_intent=(
                                 "Produce an ImplementationPlan: tech_stack, components (each "
                                 "owns at least one FR-ID), data_model, api_contracts, "
                                 "nfr_coverage. Reject any plan whose components leave FR-IDs "
-                                "unowned."
+                                "unowned.\n"
+                                "REQUIRED: adrs — one ADRRecord per architecturally "
+                                "significant decision (2-4 options_considered with trade-offs; "
+                                "status 'accepted'; ADRs are immutable — a change of course is "
+                                "a NEW record that supersedes the old one, never a rewrite).\n"
+                                "REQUIRED: threat_model — STRIDE threats (category, "
+                                "description, affected_components naming real components, "
+                                "mitigation, fr_ids). Cover at least the trust boundaries the "
+                                "components expose. When a design artifact is present, check "
+                                "the data model and API contracts against every journey and "
+                                "screen."
                             ),
-                            context_artifacts={"constitution": const, "feature_spec": spec},
+                            context_artifacts=plan_ctx,
                             agent_registry=self.agent_registry,
+                            post_validate=_plan_covers_all_frs,
                         )
+                        # Diagrams are derived artifacts — a render failure never
+                        # fails the phase, but is reported, not hidden.
+                        try:
+                            from utils.mermaid_render import write_diagrams
+                            extra_body["diagrams"] = [str(p) for p in write_diagrams(
+                                self.spec_store._spec_dir(spec_id), result.model)]
+                        except Exception as e:
+                            extra_body["diagram_warning"] = f"diagram rendering failed: {e}"
 
                     elif name == "magent_tasks":
                         spec_id = arguments["spec_id"]
@@ -1752,13 +1866,29 @@ class MageNTServer:
                         cq = self._grounded_code_quality(trace, project_root)
                         if cq is not None:
                             ctx_artifacts["code_quality"] = cq
+                        reviewers = [
+                            "delivery_manager", "security_engineer",
+                            "performance_engineer", "qa_engineer", "code_reviewer",
+                        ]
+                        try:
+                            design = self.spec_store.load_artifact(spec_id, "design")
+                        except Exception as e:
+                            raise GateError(
+                                f"design.json exists but is invalid: {e}. "
+                                f"Re-run magent_design or fix/delete the file.")
+                        audit_intent_extra = ""
+                        if design is not None:
+                            ctx_artifacts["design"] = design
+                            reviewers.append("accessibility_specialist")
+                            audit_intent_extra = (
+                                " A design artifact is present: accessibility_specialist "
+                                "reviews the screens and journeys against WCAG 2.2 AA "
+                                "(keyboard access, focus order, states, labels)."
+                            )
                         result = run_multi_agent_phase(
                             spec_store=self.spec_store, spec_id=spec_id,
                             kind="audit",
-                            agent_names=[
-                                "delivery_manager", "security_engineer",
-                                "performance_engineer", "qa_engineer", "code_reviewer",
-                            ],
+                            agent_names=reviewers,
                             merger_agent="delivery_manager",
                             user_intent=(
                                 "Audit the implementation against the spec + plan. Produce "
@@ -1768,6 +1898,7 @@ class MageNTServer:
                                 "issue must be fixed pre-release), and recommendation. When a "
                                 "code_quality artifact is present, ground Development/Security/"
                                 "Test findings in its violations."
+                                + audit_intent_extra
                             ),
                             context_artifacts=ctx_artifacts,
                             agent_registry=self.agent_registry,
@@ -1782,8 +1913,7 @@ class MageNTServer:
                             if audit_model.recommendation == "GO":
                                 audit_model.recommendation = "NO-GO"
                             for rv in missing:
-                                if rv in ("delivery_manager", "security_engineer",
-                                          "performance_engineer", "qa_engineer", "code_reviewer"):
+                                if rv in reviewers:
                                     audit_model.reviewer_findings.append(ReviewerFinding(
                                         reviewer=rv,
                                         summary=f"{rv} did not respond; audit incomplete — re-run before release.",
@@ -1847,6 +1977,7 @@ class MageNTServer:
                             + ("\n... (truncated)"
                                if len(result.model.model_dump_json()) > 1500 else "")
                         ),
+                        **extra_body,
                     }
                     return [TextContent(type="text", text=json.dumps(body, indent=2))]
 

@@ -190,6 +190,7 @@ status: draft
         "constitution":         "constitution.json",
         "feature_spec":         "spec.json",
         "clarification_log":    "clarifications.json",
+        "design":               "design.json",
         "plan":                 "plan.json",
         "tasks":                "tasks.json",
         "implementation_trace": "implementation_trace.json",

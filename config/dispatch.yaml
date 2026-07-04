@@ -202,15 +202,25 @@ skills:
       - "answers (array of {question, answer}, optional) — pre-supplied answers"
     produces: "specs/<spec-id>/clarifications.json + an updated spec.json with no remaining clarifications."
     when: "Whenever the spec has open clarification items. Required before magent_plan."
+  magent_design:
+    mode: skill
+    tools: [Read, Grep, Glob]
+    category: spec_pipeline
+    description: "Produce a DesignPack: JN-### user journeys, SC-### screen inventory with states, and role permissions, all cross-referenced to FR-IDs. Driven by ui_ux_designer + business_analyst."
+    inputs:
+      - "spec_id (string, required)"
+      - "design_brief (string, optional) — UX constraints or platform notes"
+    produces: "specs/<spec-id>/design.json validated against the DesignPack schema."
+    when: "After magent_clarify, for UI-facing projects only; headless projects (CLI/API) skip straight to magent_plan."
   magent_plan:
     mode: skill
     tools: [Read, Grep, Glob]
     category: spec_pipeline
-    description: "Produce an ImplementationPlan from system_architect + database_administrator + cloud_architect (parallel, merged by system_architect)."
+    description: "Produce an ImplementationPlan — including ADRs and a STRIDE threat model — from system_architect + database_administrator + cloud_architect + security_engineer (parallel, merged by system_architect). Emits Mermaid container + ERD diagrams."
     inputs:
       - "spec_id (string, required)"
-    produces: "specs/<spec-id>/plan.json validated against the ImplementationPlan schema."
-    when: "After magent_spec + magent_clarify. Gate: spec must have zero open clarifications."
+    produces: "specs/<spec-id>/plan.json validated against the ImplementationPlan schema, plus diagrams/*.mmd."
+    when: "After magent_spec + magent_clarify (and magent_design when UI-facing). Gate: spec must have zero open clarifications."
   magent_tasks:
     mode: skill
     tools: [Read, Write, Grep, Glob]
@@ -235,7 +245,7 @@ skills:
     mode: skill
     tools: [Read, Grep, Glob, Bash]
     category: spec_pipeline
-    description: "Multi-reviewer audit: delivery_manager + security_engineer + performance_engineer + qa_engineer (parallel) merged into a single Audit schema."
+    description: "Multi-reviewer audit: delivery_manager + security_engineer + performance_engineer + qa_engineer + code_reviewer (+ accessibility_specialist when a DesignPack exists) merged into a single Audit schema."
     inputs:
       - "spec_id (string, required)"
     produces: "specs/<spec-id>/audit.json with phase status + reviewer findings + recommendation (GO / NO-GO / GO-WITH-CONDITIONS)."
@@ -258,6 +268,15 @@ skills:
       - "spec_id (string, required)"
     produces: "JSON report with ok / loaded / missing / warnings / errors."
     when: "Anytime — before any phase to confirm upstream artifacts are clean."
+  magent_trace:
+    mode: skill
+    tools: [Read, Bash, Grep, Glob]
+    category: spec_pipeline
+    description: "Deterministic requirement coverage matrix (no LLM): per FR, the journeys, screens, components, endpoints, tasks, tests, and commits that cover it, plus the gap list."
+    inputs:
+      - "spec_id (string, required)"
+    produces: "specs/<spec-id>/traceability.json + refreshed diagrams/*.mmd, and the same report as JSON output."
+    when: "Anytime after magent_spec — answers 'what is untested / unimplemented / unowned?'"
 
 # Stateful tools that have no skill/subagent equivalent and stay MCP-only.
 mcp_only_tools:

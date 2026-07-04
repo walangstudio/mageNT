@@ -47,6 +47,13 @@ class BusinessAnalyst(BaseAgent):
         ]
 
     @property
+    def decision_heuristics(self) -> List[str]:
+        return [
+            "Every domain noun used in an FR statement gets a Constitution glossary entry — one term, one meaning, everywhere.",
+            "A requirement nobody can trace to a journey, screen, or test is a wish, not a requirement.",
+        ]
+
+    @property
     def use_cases(self) -> List[str]:
         return [
             "Starting a new project and need to gather requirements",

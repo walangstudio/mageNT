@@ -30,6 +30,7 @@ from agents.spec_schemas import (  # noqa: E402
     SPEC_SCHEMAS,
     Audit,
     ClarificationLog,
+    DesignPack,
     FeatureSpec,
     ImplementationPlan,
     ImplementationTrace,
@@ -42,6 +43,7 @@ ARTIFACT_FILES = {
     "constitution":         "constitution.json",
     "feature_spec":         "spec.json",
     "clarification_log":    "clarifications.json",
+    "design":               "design.json",
     "plan":                 "plan.json",
     "tasks":                "tasks.json",
     "implementation_trace": "implementation_trace.json",
@@ -80,7 +82,11 @@ def _load_artifact(spec_dir: Path, kind: str) -> Tuple[Optional[Any], Optional[s
         raw = path.read_text(encoding="utf-8")
         return (cls.model_validate_json(raw), None)
     except Exception as e:
-        return (None, f"{path.relative_to(REPO_ROOT)}: {e}")
+        try:
+            shown = path.relative_to(REPO_ROOT)
+        except ValueError:  # spec dir outside the repo — keep the real error
+            shown = path
+        return (None, f"{shown}: {e}")
 
 
 def _check_clarifications_resolved(
@@ -152,7 +158,8 @@ def _check_plan_fr_coverage(
     spec: Optional[FeatureSpec],
     plan: Optional[ImplementationPlan],
 ) -> None:
-    """Warn (not fail) if no Component owns a given FR-ID."""
+    """Fail if no Component owns a given FR-ID — every requirement needs a home
+    in the design before the plan gate passes."""
     if spec is None or plan is None:
         return
     owned = set()
@@ -161,8 +168,56 @@ def _check_plan_fr_coverage(
     spec_ids = {r.id for r in spec.requirements}
     uncovered = sorted(spec_ids - owned)
     if uncovered:
-        report.warn("plan.json",
+        report.fail("plan.json",
                     f"FR-IDs without an owning component: {uncovered}")
+
+
+def _check_design_cross_refs(
+    report: ValidationReport,
+    spec: Optional[FeatureSpec],
+    design: Optional[DesignPack],
+) -> None:
+    """FAIL on FR references the spec doesn't know; WARN on FRs no journey covers."""
+    if spec is None or design is None:
+        return
+    valid_ids = {r.id for r in spec.requirements}
+    for j in design.journeys:
+        unknown = [fr for fr in j.fr_ids if fr not in valid_ids]
+        if unknown:
+            report.fail("design.json",
+                        f"Journey {j.id} references unknown FR ids: {unknown}")
+    for s in design.screens:
+        unknown = [fr for fr in s.fr_ids if fr not in valid_ids]
+        if unknown:
+            report.fail("design.json",
+                        f"Screen {s.id} references unknown FR ids: {unknown}")
+    for rp in design.role_permissions:
+        unknown = [fr for fr in rp.fr_ids if fr not in valid_ids]
+        if unknown:
+            report.fail("design.json",
+                        f"Role {rp.role!r} references unknown FR ids: {unknown}")
+    journeyed = set()
+    for j in design.journeys:
+        journeyed.update(j.fr_ids)
+    uncovered = sorted(valid_ids - journeyed)
+    if uncovered:
+        report.warn("design.json",
+                    f"FR-IDs not exercised by any journey: {uncovered}")
+
+
+def _check_threat_component_refs(
+    report: ValidationReport,
+    plan: Optional[ImplementationPlan],
+) -> None:
+    if plan is None or not plan.threat_model:
+        return
+    component_names = {c.name for c in plan.components}
+    for i, threat in enumerate(plan.threat_model):
+        unknown = [c for c in threat.affected_components if c not in component_names]
+        if unknown:
+            report.warn("plan.json",
+                        f"threat_model[{i}] ({threat.category}) names unknown "
+                        f"components: {unknown}")
 
 
 def _check_deltas(report: ValidationReport, spec_dir: Path) -> None:
@@ -218,6 +273,15 @@ def validate_spec_dir(spec_dir: Path) -> ValidationReport:
     _check_plan_fr_coverage(
         report,
         parsed.get("feature_spec"),
+        parsed.get("plan"),
+    )
+    _check_design_cross_refs(
+        report,
+        parsed.get("feature_spec"),
+        parsed.get("design"),
+    )
+    _check_threat_component_refs(
+        report,
         parsed.get("plan"),
     )
     _check_deltas(report, spec_dir)

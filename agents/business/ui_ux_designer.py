@@ -57,6 +57,16 @@ class UIUXDesigner(BaseAgent):
         ]
 
     @property
+    def process_steps(self) -> List[str]:
+        return [
+            "List the user roles and what each is trying to accomplish.",
+            "Map one journey per goal (JN-### id, role, ordered steps) and name the FR-IDs it exercises.",
+            "Inventory every screen the journeys touch (SC-### id, purpose, states — always ask what empty, loading, and error look like).",
+            "Record role permissions: who can do what, tied to FR-IDs.",
+            "Cross-check: every user-observable FR appears in at least one journey; every screen serves at least one FR.",
+        ]
+
+    @property
     def use_cases(self) -> List[str]:
         return [
             "Creating user flows and wireframes",

@@ -6,6 +6,65 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.12.0] - 2026-07-04
+
+Aligns the Phase 7 build pipeline with standards-backed workflow research
+(INCOSE/SEBoK requirements quality, NASA verification matrices, NIST SSDF
+security left-shift, AWS ADR immutability, C4 views).
+
+### Added
+
+- **`magent_design`** — optional phase between clarify and plan for UI-facing
+  projects. `ui_ux_designer` + `business_analyst` produce a schema-validated
+  `DesignPack` (`design.json`): `JN-###` user journeys, `SC-###` screen
+  inventory with states (default/empty/error), and role permissions — all
+  cross-referenced to FR-IDs. Headless projects skip it; nothing downstream
+  requires it.
+- **ADRs + STRIDE threat model in the plan.** `ImplementationPlan` gains
+  `adrs` (immutable records: superseding requires a new record naming
+  `superseded_by`; rewriting an accepted ADR fails validation) and
+  `threat_model` (STRIDE category, affected components, mitigation, FR-IDs).
+  `security_engineer` joins `magent_plan` as a fourth contributor.
+- **`magent_trace`** — deterministic (no LLM) requirement coverage matrix:
+  per FR, the journeys, screens, components, endpoints, tasks, tests, and
+  commits that cover it, plus the gap list (`FR-007 has no test`). Persists
+  `traceability.json`. (`tools/trace_matrix.py`)
+- **Mermaid diagrams** — `magent_plan` and `magent_trace` emit a C4-style
+  container diagram and an ERD under `specs/<id>/diagrams/*.mmd`,
+  deterministically rendered from the plan. (`utils/mermaid_render.py`)
+- **Constitution glossary** — `Constitution.glossary` (term + definition);
+  one term, one meaning across every FR.
+- **Accessibility at audit** — when `design.json` exists,
+  `accessibility_specialist` joins the audit panel to review screens and
+  journeys against WCAG 2.2 AA.
+- Persona nudges: system_architect (ADR immutability), security_engineer
+  (STRIDE at planning time), business_analyst (glossary discipline),
+  ui_ux_designer (journey/screen/states process).
+- New skills `magent-design` and `magent-trace` in `config/dispatch.yaml`.
+
+### Changed
+
+- **`magent_validate`: an FR without an owning component is now an ERROR,
+  not a warning.** Spec dirs that previously passed with coverage warnings
+  will now fail until every FR has a home in the plan. To match, the plan
+  phase now self-repairs: a schema-valid plan that leaves FR-IDs unowned is
+  rejected inside the retry loop (new `post_validate` hook in
+  `spec_pipeline`), so `magent_plan` can no longer emit a plan its own
+  validator rejects.
+- New validator cross-checks: design journeys/screens/roles referencing
+  unknown FR-IDs fail; FRs no journey exercises warn; threats naming unknown
+  components warn. `magent_trace` applies the same severity split (`gaps` vs
+  `warnings`).
+- `ImplementationPlan` component names must be unique (duplicates previously
+  collapsed silently in diagrams).
+- A corrupt/invalid `design.json` now surfaces as a clean `phase_gate` error
+  from `magent_plan`/`magent_audit` instead of a raw traceback; diagram
+  render failures are reported in the response body instead of swallowed.
+- Re-run `python tools/generate_dispatch.py --target ~/.claude` after
+  upgrading to install the two new skills.
+
+---
+
 ## [0.11.0] - 2026-06-15
 
 ### Added
