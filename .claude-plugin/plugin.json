@@ -1,7 +1,7 @@
 {
   "name": "magent",
   "description": "48-specialist MCP development team for Claude. Consult agents by role (React Developer, Security Engineer, System Architect, etc.), run a fully typed spec-driven pipeline from constitution to release, or spawn parallel agent-teams teammates in Claude Code 2.1.32+. Requires the magent package: `pip install -e .` from the cloned repo.",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "author": {
     "name": "scr1p7k177y",
     "email": "scriptkitty@walang.studio"

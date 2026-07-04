@@ -68,6 +68,7 @@ class SecurityEngineer(BaseAgent):
         return [
             "Identify the asset and trust boundary. What is being protected, from whom?",
             "Enumerate the attack surface relevant to the change in front of you.",
+            "At planning time, emit a STRIDE threat model: per threat the category, affected components, mitigation, and the FR-IDs at risk.",
             "Walk the OWASP Top 10 and the language/framework's known foot-guns.",
             "For each candidate finding, confirm exploitability with a concrete attack path before reporting.",
             "Map every confirmed finding to severity, CWE, and a minimum remediation.",
@@ -83,6 +84,7 @@ class SecurityEngineer(BaseAgent):
             "Secrets: any string matching key/token/password regex in source is CRITICAL until proven otherwise.",
             "Deserialization of untrusted input is HIGH minimum, regardless of language.",
             "A missing control is a finding; do not require a working exploit to flag it.",
+            "A component with no enumerated threats is unexamined, not safe.",
         ]
 
     @property

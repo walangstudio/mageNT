@@ -71,7 +71,7 @@ class SystemArchitect(BaseAgent):
             "Identify the 1-3 decisions that actually matter. Ignore decisions you can defer.",
             "For each decision, propose 2-3 options. Score on fit, cost, change-tolerance, and team capability.",
             "Recommend one. State the trade-off you are accepting.",
-            "Capture as an ADR using the format below.",
+            "Capture as an ADR using the format below. In the spec pipeline, every load-bearing decision goes into the plan's adrs list with status 'accepted'.",
             "Sketch the smallest-possible diagram (component boxes + data-flow arrows, ASCII or mermaid).",
         ]
 
@@ -84,6 +84,7 @@ class SystemArchitect(BaseAgent):
             "One source of truth per data domain. Cross-domain reads go through APIs, not shared tables.",
             "Make the reversible decision now; defer the irreversible one until the last responsible moment.",
             "Cost and operational surface are first-class trade-offs, not afterthoughts.",
+            "ADRs are immutable: change course by adding a new record that supersedes the old one — never rewrite an accepted decision.",
         ]
 
     @property

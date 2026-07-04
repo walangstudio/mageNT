@@ -22,12 +22,15 @@ from agents.spec_schemas import (
     ClarificationLog,
     Clarification,
     Constitution,
+    DesignPack,
+    Journey,
     NFRTargets,
     FeatureSpec,
     FunctionalRequirement,
     UserStory,
     GivenWhenThen,
     ImplementationPlan,
+    Screen,
     TechStack,
     Component,
     TaskList,
@@ -327,6 +330,94 @@ def test_multi_agent_phase_merges_contributions(store: SpecStore):
     assert r.model.project_name == "x"
 
 
+# ---------- design phase (optional, UI-facing) --------------------------------
+
+def _design_stub(*_a, **_kw):
+    d = DesignPack(
+        spec_id=SPEC_ID,
+        journeys=[Journey(
+            id="JN-001", title="Add a task", role="user",
+            fr_ids=["FR-001", "FR-002"],
+            steps=["open the CLI", "run todo add", "run todo list"])],
+        screens=[Screen(
+            id="SC-001", name="Task list", purpose="Shows all tasks in order",
+            states=["default", "empty"], fr_ids=["FR-002"],
+            journey_ids=["JN-001"])],
+    )
+    return (d.model_dump_json(), {})
+
+
+def test_design_phase_persists_design_json(store: SpecStore):
+    def _stub(agent, sys_p, user, ctx):
+        if "Consolidate" in user:
+            return _design_stub()
+        return (f"ux notes from {agent}", {})
+
+    r = run_multi_agent_phase(
+        spec_store=store, spec_id=SPEC_ID, kind="design",
+        agent_names=["ui_ux_designer", "business_analyst"],
+        merger_agent="ui_ux_designer",
+        user_intent="Produce the DesignPack", llm_call=_stub,
+    )
+    assert (store.base_dir / SPEC_ID / "design.json").exists()
+    design = store.load_artifact(SPEC_ID, "design")
+    assert design.journeys[0].id == "JN-001"
+    assert r.model.screens[0].journey_ids == ["JN-001"]
+
+
+# ---------- validator: coverage is a FAIL, design cross-refs -------------------
+
+def _write_min_spec(store: SpecStore, spec_id: str) -> FeatureSpec:
+    spec = FeatureSpec(
+        spec_id=spec_id, feature_name="x",
+        user_stories=[UserStory(
+            priority="P1", title="Add", why="Core flow here.",
+            independent_test="run add+list and assert",
+            scenarios=[GivenWhenThen(
+                given="empty store at ~/.todo",
+                when="user runs `todo add x`",
+                then="output shows `1. x`")])],
+        requirements=[
+            FunctionalRequirement(id="FR-001", statement="System MUST persist data.",
+                                  rfc2119="MUST"),
+            FunctionalRequirement(id="FR-002", statement="System MUST list tasks.",
+                                  rfc2119="MUST"),
+        ],
+        success_criteria=["x"])
+    store.save_artifact(spec_id, "feature_spec", spec)
+    return spec
+
+
+def test_validator_fails_on_uncovered_fr(store: SpecStore):
+    """FR without an owning component is an ERROR, not a warning."""
+    from tools.validate_spec import validate_spec_dir
+    sid = "uncovered-fr"
+    _write_min_spec(store, sid)
+    store.save_artifact(sid, "plan", ImplementationPlan(
+        spec_id=sid, tech_stack=TechStack(language="py"),
+        components=[Component(name="core", responsibility="owns persistence only",
+                              owns_fr_ids=["FR-001"])]))
+    report = validate_spec_dir(store.base_dir / sid)
+    assert not report.ok
+    assert any("FR-002" in e and "owning component" in e for e in report.errors)
+
+
+def test_validator_design_cross_refs(store: SpecStore):
+    from tools.validate_spec import validate_spec_dir
+    sid = "design-refs"
+    _write_min_spec(store, sid)
+    store.save_artifact(sid, "design", DesignPack(
+        spec_id=sid,
+        journeys=[Journey(id="JN-001", title="Add task", role="user",
+                          fr_ids=["FR-001", "FR-999"], steps=["a", "b"])],
+        screens=[Screen(id="SC-001", name="Home", purpose="Lists everything here")]))
+    report = validate_spec_dir(store.base_dir / sid)
+    # unknown FR reference is an error
+    assert any("JN-001" in e and "FR-999" in e for e in report.errors)
+    # FR-002 exercised by no journey is a warning
+    assert any("FR-002" in w for w in report.warnings)
+
+
 # ---------- gates --------------------------------------------------------------
 
 def test_missing_artifact_raises_gate_error(store: SpecStore):
@@ -353,6 +444,46 @@ def test_unresolved_clarifications_block_downstream(store: SpecStore):
     )
     with pytest.raises(GateError, match="unresolved"):
         require_resolved_clarifications(spec)
+
+
+# ---------- post_validate (cross-artifact checks feed the retry loop) ----------
+
+def test_post_validate_failure_feeds_retry_and_escalates(store: SpecStore):
+    """A schema-valid plan that fails post_validate is rejected like a schema
+    failure — the error re-enters the prompt and exhausts the retry budget."""
+    intents_seen = []
+
+    def _stub(agent, sys_p, user, ctx, **_kw):
+        intents_seen.append(user)
+        return _plan_stub()
+
+    def _reject_uncovered(plan):
+        owned = {fr for c in plan.components for fr in c.owns_fr_ids}
+        uncovered = sorted({"FR-001", "FR-002", "FR-003"} - owned)
+        return f"components leave FR-IDs unowned: {uncovered}" if uncovered else None
+
+    with pytest.raises(PhaseEscalation) as exc_info:
+        run_single_agent_phase(
+            spec_store=store, spec_id="pv-test", kind="plan",
+            agent_name="system_architect", user_intent="plan it",
+            llm_call=_stub, post_validate=_reject_uncovered,
+        )
+    assert "FR-003" in exc_info.value.last_error
+    # The rejection was injected back into attempts 2 and 3.
+    assert any("unowned" in u for u in intents_seen[1:])
+    # Nothing was persisted.
+    assert store.load_artifact("pv-test", "plan") is None
+
+
+def test_post_validate_pass_persists(store: SpecStore):
+    r = run_single_agent_phase(
+        spec_store=store, spec_id="pv-ok", kind="plan",
+        agent_name="system_architect", user_intent="plan it",
+        llm_call=lambda *a, **k: _plan_stub(),
+        post_validate=lambda plan: None,
+    )
+    assert r.attempts == 1
+    assert store.load_artifact("pv-ok", "plan") is not None
 
 
 # ---------- escalation ---------------------------------------------------------

@@ -1,9 +1,9 @@
 """Pydantic schemas for the spec-driven development lifecycle.
 
 Phase 7 makes every artifact in the chain a typed, validated wire contract:
-``Constitution → FeatureSpec → ClarificationLog → ImplementationPlan →
-TaskList → ImplementationTrace → Audit → ReleaseAudit``. ``SpecDelta`` carries
-brownfield patches.
+``Constitution → FeatureSpec → ClarificationLog → DesignPack (optional) →
+ImplementationPlan → TaskList → ImplementationTrace → Audit → ReleaseAudit``.
+``SpecDelta`` carries brownfield patches.
 
 Custom validators reject the failure modes Spec Kit / OpenSpec catch only
 by convention: tautological GIVEN/WHEN/THEN, duplicate FR-IDs, unresolved
@@ -16,10 +16,19 @@ from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+try:
+    from agents.schemas import ADRConsequences, ADROption
+except ImportError:
+    from .schemas import ADRConsequences, ADROption  # type: ignore
+
 
 Priority = Literal["P1", "P2", "P3"]
 RFC2119 = Literal["MUST", "SHOULD", "MAY", "MUST NOT", "SHOULD NOT"]
 PhaseStatus = Literal["COMPLETE", "PARTIAL", "MISSING", "BLOCKED"]
+StrideCategory = Literal[
+    "spoofing", "tampering", "repudiation", "information_disclosure",
+    "denial_of_service", "elevation_of_privilege",
+]
 
 
 _TAUTOLOGY_PHRASES = (
@@ -41,6 +50,12 @@ def _looks_tautological(text: str) -> Optional[str]:
     return None
 
 
+def _require_unique(ids: list, label: str) -> None:
+    if len(ids) != len(set(ids)):
+        dupes = [i for i in ids if ids.count(i) > 1]
+        raise ValueError(f"{label} must be unique. Duplicates: {sorted(set(dupes))}")
+
+
 class _Strict(BaseModel):
     """Reject unknown keys and silently-coerced values."""
 
@@ -57,6 +72,11 @@ class NFRTargets(_Strict):
     rpo_minutes: Optional[int] = Field(None, ge=0)
 
 
+class GlossaryTerm(_Strict):
+    term: str = Field(..., min_length=1)
+    definition: str = Field(..., min_length=5)
+
+
 class Constitution(_Strict):
     project_name: str = Field(..., min_length=1)
     principles: List[str] = Field(..., min_length=3,
@@ -65,6 +85,10 @@ class Constitution(_Strict):
     tech_constraints: List[str] = Field(default_factory=list,
                                          description="Hard constraints (e.g. 'must run on Cloudflare Workers').")
     out_of_scope: List[str] = Field(default_factory=list)
+    glossary: List[GlossaryTerm] = Field(
+        default_factory=list,
+        description="Project vocabulary: one term, one meaning, used consistently in every FR.",
+    )
 
 
 # --------- FeatureSpec -----------------------------------------------------
@@ -149,10 +173,7 @@ class FeatureSpec(_Strict):
 
     @model_validator(mode="after")
     def fr_ids_unique(self):
-        ids = [r.id for r in self.requirements]
-        if len(ids) != len(set(ids)):
-            dupes = [i for i in ids if ids.count(i) > 1]
-            raise ValueError(f"FR ids must be unique. Duplicates: {sorted(set(dupes))}")
+        _require_unique([r.id for r in self.requirements], "FR ids")
         return self
 
     def all_clarifications(self) -> List[str]:
@@ -173,6 +194,58 @@ class Clarification(_Strict):
 class ClarificationLog(_Strict):
     spec_id: str
     items: List[Clarification] = Field(..., min_length=1)
+
+
+# --------- DesignPack (UX coverage: journeys, screens, roles) ---------------
+
+class Journey(_Strict):
+    id: str = Field(..., pattern=r"^JN-\d{3}$",
+                     description="JN-001 through JN-999, zero-padded.")
+    title: str = Field(..., min_length=3)
+    role: str = Field(..., min_length=1,
+                       description="The user role walking this journey.")
+    fr_ids: List[str] = Field(..., min_length=1,
+                               description="FR-IDs this journey exercises.")
+    steps: List[str] = Field(..., min_length=1,
+                              description="Ordered user-visible steps.")
+
+
+class Screen(_Strict):
+    id: str = Field(..., pattern=r"^SC-\d{3}$",
+                     description="SC-001 through SC-999, zero-padded.")
+    name: str = Field(..., min_length=1)
+    purpose: str = Field(..., min_length=10)
+    states: List[str] = Field(default_factory=list,
+                               description="UI states to design (e.g. default, empty, loading, error).")
+    fr_ids: List[str] = Field(default_factory=list)
+    journey_ids: List[str] = Field(default_factory=list,
+                                     description="JN-IDs that pass through this screen.")
+
+
+class RolePermission(_Strict):
+    role: str = Field(..., min_length=1)
+    can: List[str] = Field(..., min_length=1,
+                            description="Capabilities this role holds.")
+    fr_ids: List[str] = Field(default_factory=list)
+
+
+class DesignPack(_Strict):
+    spec_id: str
+    journeys: List[Journey] = Field(..., min_length=1)
+    screens: List[Screen] = Field(..., min_length=1)
+    role_permissions: List[RolePermission] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def ids_unique_and_journey_refs_exist(self):
+        jn_ids = [j.id for j in self.journeys]
+        _require_unique(jn_ids, "Journey ids")
+        _require_unique([s.id for s in self.screens], "Screen ids")
+        jn_set = set(jn_ids)
+        for s in self.screens:
+            for jid in s.journey_ids:
+                if jid not in jn_set:
+                    raise ValueError(f"Screen {s.id} references missing journey {jid}")
+        return self
 
 
 # --------- ImplementationPlan ----------------------------------------------
@@ -205,6 +278,30 @@ class APIEndpoint(_Strict):
     fr_ids: List[str] = Field(default_factory=list)
 
 
+class ADRRecord(_Strict):
+    """Architecture decision record. Accepted ADRs are immutable: change course
+    by adding a new record and marking the old one superseded — never rewrite."""
+
+    id: int = Field(..., ge=1)
+    title: str = Field(..., min_length=3)
+    context: str = Field(..., min_length=10,
+                          description="Forces and constraints that made this decision necessary.")
+    options_considered: List[ADROption] = Field(..., min_length=2, max_length=4)
+    decision: str = Field(..., min_length=5)
+    consequences: ADRConsequences
+    status: Literal["accepted", "superseded"] = "accepted"
+    superseded_by: Optional[int] = Field(
+        None, description="ADR id that replaces this one; required iff status is superseded.")
+
+
+class Threat(_Strict):
+    category: StrideCategory
+    description: str = Field(..., min_length=10)
+    affected_components: List[str] = Field(..., min_length=1)
+    mitigation: str = Field(..., min_length=10)
+    fr_ids: List[str] = Field(default_factory=list)
+
+
 class ImplementationPlan(_Strict):
     spec_id: str
     tech_stack: TechStack
@@ -215,6 +312,31 @@ class ImplementationPlan(_Strict):
         default_factory=dict,
         description="non-functional concern -> mechanism that addresses it",
     )
+    adrs: List[ADRRecord] = Field(default_factory=list,
+                                    description="Architecturally significant decisions.")
+    threat_model: List[Threat] = Field(default_factory=list,
+                                         description="STRIDE threats with mitigations.")
+
+    @model_validator(mode="after")
+    def component_names_unique(self):
+        _require_unique([c.name for c in self.components], "Component names")
+        return self
+
+    @model_validator(mode="after")
+    def adr_ids_unique_and_supersede_refs_valid(self):
+        ids = [a.id for a in self.adrs]
+        _require_unique(ids, "ADR ids")
+        id_set = set(ids)
+        for a in self.adrs:
+            if a.status == "superseded":
+                if a.superseded_by is None:
+                    raise ValueError(f"ADR {a.id} is superseded but names no superseded_by.")
+                if a.superseded_by == a.id or a.superseded_by not in id_set:
+                    raise ValueError(
+                        f"ADR {a.id} superseded_by {a.superseded_by} must reference another existing ADR.")
+            elif a.superseded_by is not None:
+                raise ValueError(f"ADR {a.id} is accepted; superseded_by must be unset.")
+        return self
 
 
 # --------- TaskList --------------------------------------------------------
@@ -240,9 +362,7 @@ class TaskList(_Strict):
     @model_validator(mode="after")
     def task_ids_unique_and_deps_exist(self):
         ids = [t.id for t in self.tasks]
-        if len(ids) != len(set(ids)):
-            dupes = [i for i in ids if ids.count(i) > 1]
-            raise ValueError(f"Task ids must be unique. Duplicates: {sorted(set(dupes))}")
+        _require_unique(ids, "Task ids")
         id_set = set(ids)
         for t in self.tasks:
             for dep in t.depends_on:
@@ -298,7 +418,7 @@ class PhaseAudit(_Strict):
 class ReviewerFinding(_Strict):
     reviewer: Literal[
         "delivery_manager", "security_engineer", "performance_engineer", "qa_engineer",
-        "code_reviewer",
+        "code_reviewer", "accessibility_specialist",
     ]
     summary: str = Field(..., min_length=10)
     blocking: bool
@@ -351,6 +471,7 @@ SPEC_SCHEMAS = {
     "constitution": Constitution,
     "feature_spec": FeatureSpec,
     "clarification_log": ClarificationLog,
+    "design": DesignPack,
     "plan": ImplementationPlan,
     "tasks": TaskList,
     "task_implementation": TaskImplementation,

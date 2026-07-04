@@ -1,6 +1,6 @@
 # mageNT
 
-![version](https://img.shields.io/badge/version-0.11.0-blue)
+![version](https://img.shields.io/badge/version-0.12.0-blue)
 ![python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
@@ -232,7 +232,7 @@ Per-agent dispatch lives in [`config/dispatch.yaml`](config/dispatch.yaml). Mark
 
 If you install with `--mode subagents` or `--mode skills` (no MCP), you keep all 48 subagents and the standalone scaffold/test/debug/quality skills, but you lose:
 
-- The full **spec pipeline**: `magent_constitution → magent_spec → magent_clarify → magent_plan → magent_tasks → magent_implement → magent_audit → magent_release`. The `/magent-spec` etc. slash-command wrappers exist as skill files but their bodies invoke MCP tools — without MCP they're dead pointers.
+- The full **spec pipeline**: `magent_constitution → magent_spec → magent_clarify → magent_design (optional) → magent_plan → magent_tasks → magent_implement → magent_audit → magent_release`, plus `magent_validate` and `magent_trace`. The `/magent-spec` etc. slash-command wrappers exist as skill files but their bodies invoke MCP tools — without MCP they're dead pointers.
 - **`run_parallel_agents`** (concurrent agent orchestration with skill-affinity auto-selection)
 - **`recall`** (cross-conversation memory)
 - **Workflows** (`tdd`, etc.)
@@ -492,25 +492,32 @@ Pydantic schemas live in [`agents/schemas.py`](agents/schemas.py): `SecurityRepo
 
 ## Building from Idea to Release
 
-The Phase 7 pipeline takes a one-line idea to a release-ready PR through eight schema-validated phases. Each phase routes to one or more specialist agents, validates the output against a Pydantic model, and refuses to advance if upstream artifacts are missing or invalid.
+The Phase 7 pipeline takes a one-line idea to a release-ready PR through nine schema-validated phases. Each phase routes to one or more specialist agents, validates the output against a Pydantic model, and refuses to advance if upstream artifacts are missing or invalid.
 
 ```
-magent_constitution   delivery_manager + system_architect (parallel)
+magent_constitution   delivery_manager + system_architect (parallel) → Constitution (+ glossary)
         ↓
 magent_spec           business_analyst   → FeatureSpec (FR-### + RFC 2119 + G/W/T)
         ↓
 magent_clarify        business_analyst   → ClarificationLog
         ↓
-magent_plan           system_architect + database_administrator + cloud_architect
-        ↓
+magent_design         ui_ux_designer + business_analyst → DesignPack (JN-### journeys +
+        ↓             SC-### screens + roles) — optional; headless projects skip it
+magent_plan           system_architect + database_administrator + cloud_architect +
+        ↓             security_engineer → ImplementationPlan (+ ADRs + STRIDE threat model
+        ↓             + Mermaid container/ERD diagrams)
 magent_tasks          sdet + qa_engineer → TaskList (with auto-generated failing tests)
         ↓
 magent_implement      per-task developer agents → ImplementationTrace
         ↓
-magent_audit          delivery_manager + security_engineer + performance_engineer + qa_engineer
-        ↓
+magent_audit          delivery_manager + security_engineer + performance_engineer +
+        ↓             qa_engineer + code_reviewer (+ accessibility_specialist when designed)
 magent_release        delivery_manager → ReleaseAudit (GO / NO-GO / GO-WITH-CONDITIONS)
 ```
+
+Run `magent_trace <spec-id>` anytime after `magent_spec` for the deterministic coverage
+matrix: per FR, the journeys, screens, components, endpoints, tasks, tests, and commits
+that cover it — plus the gap list (`FR-007 has no test`). Persisted as `traceability.json`.
 
 **Validators that competitors only enforce by convention:**
 
@@ -518,7 +525,9 @@ magent_release        delivery_manager → ReleaseAudit (GO / NO-GO / GO-WITH-CO
 - Every Functional Requirement must contain its declared RFC 2119 verb (`MUST`, `SHOULD`, `MAY`, ...).
 - `magent_plan` refuses to run if any `[NEEDS CLARIFICATION]` item is open on the spec.
 - `magent_implement` refuses to run if any task's `failing_test_path` is absent on disk.
-- `magent validate <spec-id>` cross-references FR-IDs across spec / tasks / implementation_trace.
+- `magent validate <spec-id>` cross-references FR-IDs across spec / design / tasks / implementation_trace — an FR with no owning component is an **error**, not a warning.
+- ADRs are immutable: a superseded decision must name its replacement; rewriting an accepted ADR fails schema validation.
+- DesignPack journeys/screens referencing unknown FR-IDs fail validation; FRs no journey exercises are warned.
 
 **Capability comparison vs the leaders (May 2026):**
 
@@ -538,8 +547,8 @@ magent_release        delivery_manager → ReleaseAudit (GO / NO-GO / GO-WITH-CO
 | Cost / token tracking per phase | no | no | yes | **`specs/<id>/cost.json`** |
 | Stuck-loop detection + auto-escalate | no | no | yes | **3-attempt budget** |
 | Cross-spec semantic memory | no | no | session-only | **mememo (persistent embeddings)** |
-| Slash commands (Claude Code) | yes | yes | yes | **9 new skills** |
-| MCP tool surface (every other client) | no | no | no | **9 new tools** |
+| Slash commands (Claude Code) | yes | yes | yes | **11 new skills** |
+| MCP tool surface (every other client) | no | no | no | **11 new tools** |
 
 **Quick start (against an empty project directory):**
 
@@ -547,7 +556,9 @@ magent_release        delivery_manager → ReleaseAudit (GO / NO-GO / GO-WITH-CO
 > magent_constitution project_name=todo-cli intent="A CLI todo app with add/list/done"
 > magent_spec   spec_id=todo-cli-abc123 idea="add/list/done with persistent storage"
 > magent_clarify spec_id=todo-cli-abc123
+> magent_design spec_id=todo-cli-abc123     # UI-facing projects only; CLI/API skip
 > magent_plan   spec_id=todo-cli-abc123
+> magent_trace  spec_id=todo-cli-abc123     # coverage matrix — run anytime
 > magent_tasks  spec_id=todo-cli-abc123 project_root=.
 > magent_implement spec_id=todo-cli-abc123
 > magent_audit  spec_id=todo-cli-abc123

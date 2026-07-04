@@ -131,6 +131,7 @@ def run_single_agent_phase(
     context_artifacts: Optional[Dict[str, Any]] = None,
     agent_registry: Optional[Dict[str, Any]] = None,
     llm_call: Callable[..., Tuple[str, Dict[str, Any]]] = _default_llm_call,
+    post_validate: Optional[Callable[[Any], Optional[str]]] = None,
 ) -> PhaseResult:
     """Drive one agent through one phase, validate, persist.
 
@@ -138,6 +139,11 @@ def run_single_agent_phase(
     (server.AGENT_CLASSES instances). When provided we render the v2 prompt
     via ``BaseAgent.get_system_prompt()`` so the JSON-Schema injection from
     Phase 6 lands automatically.
+
+    ``post_validate`` runs cross-artifact checks the schema alone can't
+    express (e.g. plan components must own every spec FR-ID). Return an
+    error string to reject the attempt — it feeds the same self-repair
+    retry loop as a schema failure — or None to accept.
     """
     if kind not in SPEC_SCHEMAS:
         raise ValueError(f"Unknown phase kind: {kind!r}")
@@ -201,6 +207,17 @@ def run_single_agent_phase(
                 elif k == "constitution":
                     parts.append(f"project_name: {obj.get('project_name','')}")
                     parts.append("principles: " + "; ".join(obj.get("principles", [])))
+                elif k == "design":
+                    parts.append("journeys:\n" + "\n".join(
+                        f"  - {j.get('id','')} ({j.get('role','')}): {j.get('title','')} "
+                        f"covers {j.get('fr_ids',[])}"
+                        for j in obj.get("journeys", [])
+                    ))
+                    parts.append("screens:\n" + "\n".join(
+                        f"  - {s.get('id','')} {s.get('name','')}: states "
+                        f"{s.get('states',[])} covers {s.get('fr_ids',[])}"
+                        for s in obj.get("screens", [])
+                    ))
                 elif k == "plan":
                     comps = obj.get("components", [])
                     parts.append(f"tech_stack: {obj.get('tech_stack',{}).get('language','')}"
@@ -209,6 +226,10 @@ def run_single_agent_phase(
                         f"  - {c.get('name','')}: owns {c.get('owns_fr_ids',[])}"
                         for c in comps
                     ))
+                    if obj.get("adrs"):
+                        parts.append(f"adrs: {len(obj['adrs'])} decision(s) recorded")
+                    if obj.get("threat_model"):
+                        parts.append(f"threat_model: {len(obj['threat_model'])} threat(s) enumerated")
                 elif k == "audit":
                     parts.append(f"recommendation: {obj.get('recommendation','')}")
                 else:
@@ -236,6 +257,10 @@ def run_single_agent_phase(
             "attempt": attempt, "agent": agent_name, **usage,
         })
         model, err = _extract_and_validate(kind, raw)
+        if model is not None and post_validate is not None:
+            perr = post_validate(model)
+            if perr:
+                model, err = None, perr
         if model is not None:
             path = spec_store.save_artifact(spec_id, kind, model)
             return PhaseResult(
@@ -269,6 +294,7 @@ def run_multi_agent_phase(
     context_artifacts: Optional[Dict[str, Any]] = None,
     agent_registry: Optional[Dict[str, Any]] = None,
     llm_call: Callable[..., Tuple[str, Dict[str, Any]]] = _default_llm_call,
+    post_validate: Optional[Callable[[Any], Optional[str]]] = None,
 ) -> PhaseResult:
     """Fan out to N agents, then ask ``merger_agent`` to consolidate into the schema.
 
@@ -356,6 +382,7 @@ def run_multi_agent_phase(
         context_artifacts=context_artifacts,
         agent_registry=agent_registry,
         llm_call=llm_call,
+        post_validate=post_validate,
     )
     res.failed_contributors = failed
     return res

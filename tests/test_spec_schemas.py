@@ -10,21 +10,28 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from agents.schemas import ADRConsequences, ADROption
 from agents.spec_schemas import (
     SPEC_SCHEMAS,
+    ADRRecord,
     Audit,
     ClarificationLog,
     Constitution,
+    DesignPack,
     FeatureSpec,
     FunctionalRequirement,
     GivenWhenThen,
     ImplementationPlan,
+    Journey,
     NFRTargets,
     PhaseAudit,
+    ReviewerFinding,
+    Screen,
     SpecDelta,
     Task,
     TaskList,
     TechStack,
+    Threat,
     Component,
     Clarification,
     UserStory,
@@ -284,11 +291,169 @@ class TestPlanAuditDelta:
         assert len(d.added) == 1
 
 
+# ---------- Glossary (Constitution) -----------------------------------------
+
+class TestGlossary:
+    def test_old_json_without_glossary_still_validates(self):
+        c = Constitution.model_validate_json(
+            '{"project_name": "x", "principles": ["a", "b", "c"], "nfr_targets": {}}'
+        )
+        assert c.glossary == []
+
+    def test_glossary_terms_accepted(self):
+        c = Constitution(
+            project_name="x",
+            principles=["a", "b", "c"],
+            nfr_targets=NFRTargets(),
+            glossary=[{"term": "task", "definition": "A single unit of user work."}],
+        )
+        assert c.glossary[0].term == "task"
+
+    def test_unknown_keys_still_rejected(self):
+        with pytest.raises(ValidationError):
+            Constitution.model_validate(
+                {"project_name": "x", "principles": ["a", "b", "c"],
+                 "nfr_targets": {}, "vocabulary": []}
+            )
+
+
+# ---------- DesignPack -------------------------------------------------------
+
+def _ok_journey(id_: str = "JN-001") -> Journey:
+    return Journey(
+        id=id_, title="Add a task", role="user",
+        fr_ids=["FR-001"], steps=["open app", "type task", "press save"],
+    )
+
+
+def _ok_screen(id_: str = "SC-001", journey_ids=None) -> Screen:
+    return Screen(
+        id=id_, name="Home", purpose="Lists all tasks with add affordance",
+        states=["default", "empty", "error"], fr_ids=["FR-001"],
+        journey_ids=journey_ids if journey_ids is not None else ["JN-001"],
+    )
+
+
+class TestDesignPack:
+    def test_happy_path(self):
+        d = DesignPack(spec_id="x", journeys=[_ok_journey()], screens=[_ok_screen()])
+        assert d.journeys[0].id == "JN-001"
+        assert d.screens[0].states == ["default", "empty", "error"]
+
+    def test_bad_id_patterns_rejected(self):
+        with pytest.raises(ValidationError):
+            _ok_journey("J-1")
+        with pytest.raises(ValidationError):
+            _ok_screen("SCREEN-001")
+
+    def test_duplicate_ids_rejected(self):
+        with pytest.raises(ValidationError, match="unique"):
+            DesignPack(spec_id="x",
+                       journeys=[_ok_journey(), _ok_journey()],
+                       screens=[_ok_screen()])
+        with pytest.raises(ValidationError, match="unique"):
+            DesignPack(spec_id="x", journeys=[_ok_journey()],
+                       screens=[_ok_screen(), _ok_screen()])
+
+    def test_dangling_journey_ref_rejected(self):
+        with pytest.raises(ValidationError, match="missing journey"):
+            DesignPack(spec_id="x", journeys=[_ok_journey()],
+                       screens=[_ok_screen(journey_ids=["JN-099"])])
+
+
+# ---------- ADRRecord + Threat (ImplementationPlan) --------------------------
+
+def _ok_adr(id_: int = 1, **kw) -> ADRRecord:
+    return ADRRecord(
+        id=id_, title="Store tasks in SQLite",
+        context="Single-user CLI; needs durable local persistence without a server.",
+        options_considered=[
+            ADROption(name="SQLite", trade_off="zero-ops, single file"),
+            ADROption(name="JSON file", trade_off="simple but no concurrent safety"),
+        ],
+        decision="Use SQLite via the stdlib driver.",
+        consequences=ADRConsequences(positive=["durable"], negative_accepted=["binary file diffs"]),
+        **kw,
+    )
+
+
+def _ok_plan(**kw) -> ImplementationPlan:
+    return ImplementationPlan(
+        spec_id="x", tech_stack=TechStack(language="python"),
+        components=[Component(name="core", responsibility="owns task CRUD and persistence",
+                              owns_fr_ids=["FR-001"])],
+        **kw,
+    )
+
+
+class TestPlanADRsAndThreats:
+    def test_old_plan_json_without_new_fields_validates(self):
+        p = ImplementationPlan.model_validate_json(
+            '{"spec_id": "x", "tech_stack": {"language": "py"},'
+            ' "components": [{"name": "c", "responsibility": "does the thing"}]}'
+        )
+        assert p.adrs == [] and p.threat_model == []
+
+    def test_adr_defaults_accepted_status(self):
+        p = _ok_plan(adrs=[_ok_adr()])
+        assert p.adrs[0].status == "accepted"
+        assert p.adrs[0].superseded_by is None
+
+    def test_duplicate_adr_ids_rejected(self):
+        with pytest.raises(ValidationError, match="unique"):
+            _ok_plan(adrs=[_ok_adr(1), _ok_adr(1)])
+
+    def test_superseded_requires_pointer(self):
+        with pytest.raises(ValidationError, match="superseded_by"):
+            _ok_plan(adrs=[_ok_adr(1, status="superseded")])
+
+    def test_superseded_by_must_reference_existing_other_adr(self):
+        with pytest.raises(ValidationError, match="another existing ADR"):
+            _ok_plan(adrs=[_ok_adr(1, status="superseded", superseded_by=99)])
+        with pytest.raises(ValidationError, match="another existing ADR"):
+            _ok_plan(adrs=[_ok_adr(1, status="superseded", superseded_by=1)])
+
+    def test_accepted_with_pointer_rejected(self):
+        with pytest.raises(ValidationError, match="must be unset"):
+            _ok_plan(adrs=[_ok_adr(1, superseded_by=2), _ok_adr(2)])
+
+    def test_valid_supersede_chain(self):
+        p = _ok_plan(adrs=[_ok_adr(1, status="superseded", superseded_by=2), _ok_adr(2)])
+        assert p.adrs[0].superseded_by == 2
+
+    def test_duplicate_component_names_rejected(self):
+        with pytest.raises(ValidationError, match="Component names must be unique"):
+            ImplementationPlan(
+                spec_id="x", tech_stack=TechStack(language="py"),
+                components=[
+                    Component(name="api", responsibility="handles the requests"),
+                    Component(name="api", responsibility="handles them differently"),
+                ])
+
+    def test_threat_stride_category_enforced(self):
+        t = Threat(category="tampering", description="Task file edited out of band",
+                   affected_components=["core"], mitigation="Checksum the store on load",
+                   fr_ids=["FR-001"])
+        assert t.category == "tampering"
+        with pytest.raises(ValidationError):
+            Threat(category="phishing", description="Not a STRIDE category here",
+                   affected_components=["core"], mitigation="n/a but long enough")
+
+
+# ---------- ReviewerFinding extension ----------------------------------------
+
+def test_accessibility_specialist_is_valid_reviewer():
+    f = ReviewerFinding(reviewer="accessibility_specialist",
+                        summary="Focus order breaks on the settings screen.",
+                        blocking=True)
+    assert f.reviewer == "accessibility_specialist"
+
+
 # ---------- Registry sanity ------------------------------------------------
 
 def test_registry_keys_match_classes():
     expected = {
-        "constitution", "feature_spec", "clarification_log", "plan",
+        "constitution", "feature_spec", "clarification_log", "design", "plan",
         "tasks", "task_implementation", "implementation_trace",
         "audit", "spec_delta",
     }
